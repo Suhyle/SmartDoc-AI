@@ -1,20 +1,6 @@
 import { Routes, Route } from 'react-router-dom'
 import Splash from './pages/Splash'
-
-function Login() {
-  return (
-    <div style={{
-      display: 'flex',
-      justifyContent: 'center',
-      alignItems: 'center',
-      height: '100vh',
-      fontSize: '30px',
-      fontWeight: 'bold'
-    }}>
-      Login Page Coming Soon...
-    </div>
-  )
-}
+import Login from './pages/Login'
 
 function App() {
   return (
