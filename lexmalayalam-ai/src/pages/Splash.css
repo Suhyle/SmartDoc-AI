@@ -1,0 +1,216 @@
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap');
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+.splash {
+  position: relative;
+  height: 100dvh;
+  width: 100%;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Poppins', sans-serif;
+  background: linear-gradient(160deg, #2a1b6b 0%, #5b34e0 42%, #8b6bff 78%, #d9ccff 100%);
+}
+
+/* ---------- Floating decorative shapes ---------- */
+.splash-shape {
+  position: absolute;
+  border-radius: 50%;
+  opacity: 0.35;
+  filter: blur(1px);
+  animation: floatShape 7s ease-in-out infinite;
+}
+
+.splash-shape--one {
+  width: 220px;
+  height: 220px;
+  top: -60px;
+  left: -60px;
+  background: radial-gradient(circle at 30% 30%, #ffffff, transparent 70%);
+}
+
+.splash-shape--two {
+  width: 160px;
+  height: 160px;
+  bottom: 8%;
+  right: -50px;
+  background: radial-gradient(circle at 30% 30%, #d8ccff, transparent 70%);
+  animation-delay: 1.2s;
+}
+
+.splash-shape--three {
+  width: 110px;
+  height: 110px;
+  top: 16%;
+  right: 10%;
+  background: radial-gradient(circle at 30% 30%, #ffffff, transparent 70%);
+  opacity: 0.22;
+  animation-delay: 2.1s;
+}
+
+@keyframes floatShape {
+  0%, 100% {
+    transform: translateY(0) translateX(0);
+  }
+  50% {
+    transform: translateY(-22px) translateX(10px);
+  }
+}
+
+/* ---------- Floating stars ---------- */
+.splash-star {
+  position: absolute;
+  color: #ffffff;
+  opacity: 0.8;
+  animation: twinkle 2.6s ease-in-out infinite;
+}
+
+.splash-star--a {
+  top: 14%;
+  left: 18%;
+  font-size: 18px;
+  animation-delay: 0s;
+}
+
+.splash-star--b {
+  top: 24%;
+  right: 20%;
+  font-size: 14px;
+  animation-delay: 0.6s;
+}
+
+.splash-star--c {
+  bottom: 22%;
+  left: 14%;
+  font-size: 20px;
+  animation-delay: 1.1s;
+}
+
+.splash-star--d {
+  bottom: 30%;
+  right: 16%;
+  font-size: 12px;
+  animation-delay: 1.6s;
+}
+
+.splash-star--e {
+  top: 44%;
+  left: 8%;
+  font-size: 15px;
+  animation-delay: 2.1s;
+}
+
+@keyframes twinkle {
+  0%, 100% {
+    opacity: 0.2;
+    transform: scale(0.8);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.15);
+  }
+}
+
+/* ---------- Center content ---------- */
+.splash-content {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 0 24px;
+  animation: fadeZoomIn 0.9s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes fadeZoomIn {
+  from {
+    opacity: 0;
+    transform: scale(0.85) translateY(18px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.splash-logo {
+  width: 110px;
+  height: 110px;
+  border-radius: 28px;
+  background: rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 28px;
+  box-shadow: 0 20px 45px rgba(20, 8, 70, 0.35);
+}
+
+.splash-title {
+  font-weight: 700;
+  font-size: 2.2rem;
+  color: #ffffff;
+  letter-spacing: -0.01em;
+  margin-bottom: 8px;
+}
+
+.splash-title span {
+  color: #d9caff;
+}
+
+.splash-tagline {
+  font-weight: 400;
+  font-size: 1rem;
+  color: rgba(255, 255, 255, 0.85);
+  margin-bottom: 42px;
+  letter-spacing: 0.01em;
+}
+
+/* ---------- Loader ---------- */
+.splash-loader {
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.splash-loader-ring {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  border: 3px solid rgba(255, 255, 255, 0.25);
+  border-top-color: #ffffff;
+  animation: spin 0.9s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ---------- Responsive ---------- */
+@media (max-width: 480px) {
+  .splash-logo {
+    width: 92px;
+    height: 92px;
+  }
+
+  .splash-title {
+    font-size: 1.7rem;
+  }
+
+  .splash-tagline {
+    font-size: 0.9rem;
+    margin-bottom: 34px;
+  }
+}
