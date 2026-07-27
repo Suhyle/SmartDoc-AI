@@ -1,19 +1,33 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import './Login.css'
-
+import logo from "../assets/logo.png";
+import { supabase } from "../supabase";
 // LexMalayalam AI — Login Page
 // AI-based Malayalam Legal Document Assistant
 
 export default function Login() {
+  const navigate = useNavigate()
   const [showPassword, setShowPassword] = useState(false)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
 
   // Placeholder handlers — no auth logic implemented yet
-  const handleLogin = (e) => {
-    e.preventDefault()
-    console.log('Login clicked', { email, password })
-  }
+  const handleLogin = async (e) => {
+    e.preventDefault();
+
+    const { data, error } = await supabase.auth.signInWithPassword({
+        email: email,
+        password: password,
+    });
+
+    if (error) {
+        alert(error.message);
+    } else {
+        alert("Login Successful!");
+        console.log(data);
+    }
+};
 
   const handleForgotPassword = () => {
     console.log('Forgot password clicked')
@@ -28,7 +42,7 @@ export default function Login() {
   }
 
   const handleSignUp = () => {
-    console.log('Sign up clicked')
+     navigate('/signup')
   }
 
   return (
@@ -52,63 +66,15 @@ export default function Login() {
           <p className="login-subtitle">Login to continue</p>
         </header>
 
-        {/* ---------- Robot Illustration ---------- */}
-        <div className="login-illustration" aria-hidden="true">
-          <svg viewBox="0 0 220 160" width="100%" height="100%">
-            <ellipse cx="110" cy="142" rx="72" ry="10" fill="#EDE7FF" />
-
-            {/* Document held by the robot */}
-            <rect
-              x="22"
-              y="72"
-              width="46"
-              height="64"
-              rx="6"
-              fill="#ffffff"
-              stroke="#DCD2FF"
-              strokeWidth="2"
-              transform="rotate(-8 45 104)"
-            />
-            <rect x="28" y="82" width="30" height="4" rx="2" fill="#C9B8FF" transform="rotate(-8 43 84)" />
-            <rect x="26" y="92" width="34" height="4" rx="2" fill="#C9B8FF" transform="rotate(-8 43 94)" />
-            <rect x="30" y="102" width="24" height="4" rx="2" fill="#C9B8FF" transform="rotate(-8 42 104)" />
-
-            {/* Secondary purple card */}
-            <rect x="120" y="48" width="58" height="72" rx="10" fill="url(#cardGradient)" />
-            <circle cx="149" cy="72" r="14" fill="#ffffff" opacity="0.9" />
-            <rect x="132" y="92" width="34" height="5" rx="2.5" fill="#ffffff" opacity="0.75" />
-            <rect x="132" y="102" width="24" height="5" rx="2.5" fill="#ffffff" opacity="0.55" />
-
-            {/* Robot head */}
-            <g>
-              <rect x="90" y="16" width="12" height="14" rx="4" fill="url(#botGradient)" />
-              <circle cx="96" cy="14" r="3.4" fill="#7B5CF5" />
-              <rect x="72" y="26" width="66" height="56" rx="22" fill="url(#botGradient)" />
-              <circle cx="90" cy="52" r="5" fill="#2A1B6B" />
-              <circle cx="120" cy="52" r="5" fill="#2A1B6B" />
-              <path d="M88 64q17 10 34 0" stroke="#2A1B6B" strokeWidth="3" strokeLinecap="round" fill="none" />
-              <rect x="66" y="46" width="8" height="18" rx="4" fill="url(#botGradient)" />
-              <rect x="138" y="46" width="8" height="18" rx="4" fill="url(#botGradient)" />
-            </g>
-
-            {/* Sparkles around illustration */}
-            <circle className="illustration-spark" cx="186" cy="30" r="3" fill="#B7A1FF" />
-            <circle className="illustration-spark illustration-spark--b" cx="16" cy="50" r="2.4" fill="#B7A1FF" />
-            <circle className="illustration-spark illustration-spark--c" cx="104" cy="8" r="2" fill="#C9B8FF" />
-
-            <defs>
-              <linearGradient id="cardGradient" x1="120" y1="48" x2="178" y2="120" gradientUnits="userSpaceOnUse">
-                <stop stopColor="#8B6BFF" />
-                <stop offset="1" stopColor="#5B34E0" />
-              </linearGradient>
-              <linearGradient id="botGradient" x1="66" y1="16" x2="146" y2="82" gradientUnits="userSpaceOnUse">
-                <stop stopColor="#F1ECFF" />
-                <stop offset="1" stopColor="#D6C8FF" />
-              </linearGradient>
-            </defs>
-          </svg>
-        </div>
-
+        
+        {/* ---------- Logo ---------- */}
+<div className="login-illustration">
+  <img
+    src={logo}
+    alt="SmartDoc AI Logo"
+    className="login-logo"
+  />
+</div>
         {/* ---------- Login Form ---------- */}
         <form className="login-form" onSubmit={handleLogin}>
           {/* Email field */}
