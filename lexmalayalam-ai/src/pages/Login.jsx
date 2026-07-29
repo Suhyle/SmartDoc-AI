@@ -14,19 +14,19 @@ export default function Login() {
 
   // Placeholder handlers — no auth logic implemented yet
   const handleLogin = async (e) => {
-    e.preventDefault();
+  e.preventDefault();
 
-    const { data, error } = await supabase.auth.signInWithPassword({
-        email: email,
-        password: password,
-    });
+  const { data, error } = await supabase.auth.signInWithPassword({
+    email: email,
+    password: password,
+  });
 
-    if (error) {
-        alert(error.message);
-    } else {
-        alert("Login Successful!");
-        console.log(data);
-    }
+  if (error) {
+    alert(error.message);
+  } else {
+    console.log(data);
+    navigate("/home");
+  }
 };
 
   const handleForgotPassword = () => {

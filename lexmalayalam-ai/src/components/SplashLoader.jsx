@@ -13,7 +13,7 @@ function SplashLoader({ children }) {
   }, []);
 
   if (loading) {
-    return <Splash />;
+    return <Splash duration={2000} hideNavigation={true} />;
   }
 
   return children;

@@ -1,17 +1,22 @@
-import { useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
-import './Splash.css'
+import { useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import "./Splash.css";
 
-export default function Splash() {
-  const navigate = useNavigate()
+export default function Splash({
+  duration = 3000,
+  hideNavigation = false,
+}) {
+  const navigate = useNavigate();
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      navigate('/login')
-    }, 4000)
+    if (hideNavigation) return;
 
-    return () => clearTimeout(timer)
-  }, [navigate])
+    const timer = setTimeout(() => {
+      navigate("/login");
+    }, duration);
+
+    return () => clearTimeout(timer);
+  }, [navigate, duration, hideNavigation]);
 
   return (
     <div className="splash">
@@ -27,32 +32,34 @@ export default function Splash() {
 
       <div className="splash-content">
         <div className="splash-logo">
-          <svg
-            width="72"
-            height="72"
-            viewBox="0 0 72 72"
-            fill="none"
-            xmlns="http://www.w3.org/2000/svg"
-          >
-            <rect x="14" y="8" width="40" height="56" rx="8" fill="#6C4CF1" />
-            <path
-              d="M40 8v12a4 4 0 0 0 4 4h10"
-              stroke="#fff"
-              strokeWidth="2"
-              fill="none"
-            />
-            <rect x="22" y="30" width="20" height="3" rx="1.5" fill="#fff" />
-            <rect x="22" y="38" width="24" height="3" rx="1.5" fill="#fff" />
-            <rect x="22" y="46" width="16" height="3" rx="1.5" fill="#fff" />
-          </svg>
-        </div>
+  <svg
+    width="72"
+    height="72"
+    viewBox="0 0 72 72"
+    fill="none"
+    xmlns="http://www.w3.org/2000/svg"
+  >
+    <rect x="14" y="8" width="40" height="56" rx="8" fill="#6C4CF1" />
+    <path
+      d="M40 8v12a4 4 0 0 0 4 4h10"
+      stroke="#fff"
+      strokeWidth="2"
+      fill="none"
+    />
+    <rect x="22" y="30" width="20" height="3" rx="1.5" fill="#fff" />
+    <rect x="22" y="38" width="24" height="3" rx="1.5" fill="#fff" />
+    <rect x="22" y="46" width="16" height="3" rx="1.5" fill="#fff" />
+  </svg>
+</div>
+
+        
 
         <h1 className="splash-title">
           Smart<span>Doc</span> AI
         </h1>
 
         <p className="splash-tagline">
-           അപ്‌ലോഡ് ചെയ്യൂ • ലളിതമാക്കൂ
+          അപ്‌ലോഡ് ചെയ്യൂ • ലളിതമാക്കൂ
         </p>
 
         <div className="splash-loader">
@@ -60,5 +67,5 @@ export default function Splash() {
         </div>
       </div>
     </div>
-  )
+  );
 }
