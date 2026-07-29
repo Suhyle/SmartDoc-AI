@@ -15,6 +15,7 @@ import UrlUpload from "./pages/UrlUpload";
 import Documents from "./pages/Documents";
 import Chat from "./pages/Chat";
 import Profile from "./pages/Profile";
+import EmailVerified from "./pages/EmailVerified";
 
 function App() {
   return (
@@ -59,7 +60,12 @@ function App() {
 
       {/* Profile */}
       <Route path="/profile" element={<Profile />} />
+      <Route
+  path="/email-verified"
+  element={<EmailVerified />}
+    />
     </Routes>
+    
   );
 }
 

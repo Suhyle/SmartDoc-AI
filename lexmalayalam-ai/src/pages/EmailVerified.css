@@ -1,0 +1,321 @@
+html,
+body,
+#root {
+  margin: 0;
+  padding: 0;
+  min-height: 100%;
+  font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+}
+
+body {
+  background: #f4f7fb;
+}
+
+.verified-page {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: linear-gradient(180deg, #eef4ff 0%, #f7f9fc 100%);
+  padding: 20px;
+  box-sizing: border-box;
+}
+
+/* ---------- Top Bar ---------- */
+
+.verified-topbar {
+  width: 100%;
+  max-width: 1000px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 50px;
+}
+
+.verified-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.verified-brand svg {
+  flex-shrink: 0;
+}
+
+.verified-brand-icon {
+  font-size: 30px;
+  color: #2563eb;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.verified-brand-name {
+  font-size: 24px;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.verified-brand-name span {
+  color: #2563eb;
+}
+
+.verified-secure-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: #ecfdf5;
+  color: #15803d;
+  padding: 8px 14px;
+  border-radius: 30px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+/* ---------- Card ---------- */
+
+.verified-card {
+  width: 100%;
+  max-width: 600px;
+  background: #ffffff;
+  border-radius: 22px;
+  padding: 45px 35px;
+  text-align: center;
+  box-shadow: 0 15px 35px rgba(0, 0, 0, 0.08);
+  transition: transform 0.25s ease;
+}
+
+.verified-card:hover {
+  transform: translateY(-4px);
+}
+
+/* ---------- Success Icon ---------- */
+
+.verified-success-icon {
+  position: relative;
+  margin-bottom: 25px;
+}
+
+.verified-check-circle {
+  width: 90px;
+  height: 90px;
+  margin: auto;
+  border-radius: 50%;
+  background: #22c55e;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.verified-check-mark {
+  color: white;
+}
+
+.verified-spark {
+  position: absolute;
+  color: #fbbf24;
+  font-size: 18px;
+}
+
+.verified-spark--a {
+  top: 5px;
+  left: 35%;
+}
+
+.verified-spark--b {
+  top: 18px;
+  right: 32%;
+}
+
+.verified-spark--c {
+  bottom: 10px;
+  left: 30%;
+}
+
+/* ---------- Text ---------- */
+
+.verified-heading {
+  margin: 0;
+  font-size: 34px;
+  color: #0f172a;
+}
+
+.verified-subtitle {
+  margin-top: 10px;
+  font-size: 18px;
+  color: #16a34a;
+  font-weight: 600;
+}
+
+.verified-description {
+  margin-top: 30px;
+  color: #475569;
+  line-height: 1.8;
+  font-size: 16px;
+}
+
+/* ---------- Divider ---------- */
+
+.verified-divider {
+  margin: 28px 0;
+  display: flex;
+  align-items: center;
+}
+
+.verified-divider span:first-child,
+.verified-divider span:last-child {
+  flex: 1;
+  height: 1px;
+  background: #dbe3ee;
+}
+
+.verified-divider-icon {
+  margin: 0 15px;
+  color: #22c55e;
+}
+
+/* ---------- Info Card ---------- */
+
+.verified-info-card {
+  margin-top: 28px;
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  padding: 18px;
+  border-radius: 14px;
+}
+
+.verified-info-icon {
+  color: #2563eb;
+}
+
+.verified-info-text {
+  text-align: left;
+}
+
+.verified-info-title {
+  display: block;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.verified-info-subtitle {
+  display: block;
+  margin-top: 5px;
+  color: #64748b;
+  font-size: 14px;
+}
+
+/* ---------- Button ---------- */
+
+.verified-cta-btn {
+  width: 100%;
+  margin-top: 30px;
+  background: #2563eb;
+  color: white;
+  border: none;
+  border-radius: 12px;
+  padding: 16px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 10px;
+  transition: 0.3s;
+}
+
+.verified-cta-btn:hover {
+  background: #1d4ed8;
+}
+
+.verified-cta-btn:focus-visible {
+  outline: 3px solid #6fcf9c;
+  outline-offset: 3px;
+}
+
+/* ---------- Note ---------- */
+
+.verified-close-note {
+  margin-top: 18px;
+  color: #64748b;
+  font-size: 14px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 6px;
+}
+
+/* ---------- Footer ---------- */
+
+.verified-footer {
+  margin-top: 50px;
+  text-align: center;
+  color: #64748b;
+}
+
+.verified-footer-icon {
+  font-size: 34px;
+  color: #2563eb;
+  margin-bottom: 8px;
+}
+
+.verified-footer-brand {
+  margin: 10px 0 5px;
+  font-size: 20px;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.verified-footer-brand span {
+  color: #2563eb;
+}
+
+.verified-footer-tagline {
+  font-size: 15px;
+  color: #475569;
+  font-weight: 500;
+  margin-top: 8px;
+}
+
+.verified-footer-copy {
+  margin-top: 14px;
+  font-size: 13px;
+  color: #94a3b8;
+}
+
+/* ---------- Responsive ---------- */
+
+@media (max-width: 768px) {
+  .verified-topbar {
+    flex-direction: column;
+    gap: 15px;
+  }
+
+  .verified-card {
+    padding: 30px 22px;
+  }
+
+  .verified-heading {
+    font-size: 28px;
+  }
+
+  .verified-description {
+    font-size: 15px;
+  }
+
+  .verified-brand-name {
+    font-size: 22px;
+  }
+
+  .verified-footer-brand {
+    font-size: 18px;
+  }
+
+  .verified-secure-badge {
+    font-size: 13px;
+  }
+}
