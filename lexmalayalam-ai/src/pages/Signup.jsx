@@ -28,12 +28,12 @@ const Signup = () => {
   const { data, error } = await supabase.auth.signUp({
   email: email,
   password: password,
-  options: {
-    emailRedirectTo: window.location.origin,
-    data: {
-      full_name: name,
-    },
+ options: {
+  emailRedirectTo: "https://smart-doc-ai-two.vercel.app/email-verified",
+  data: {
+    full_name: name,
   },
+},
 });
 
   if (error) {
