@@ -26,14 +26,15 @@ const Signup = () => {
   }
 
   const { data, error } = await supabase.auth.signUp({
-    email: email,
-    password: password,
-    options: {
-      data: {
-        full_name: name,
-      },
+  email: email,
+  password: password,
+  options: {
+    emailRedirectTo: window.location.origin,
+    data: {
+      full_name: name,
     },
-  });
+  },
+});
 
   if (error) {
     alert(error.message);
