@@ -1,0 +1,1514 @@
+import express from "express";
+import cors from "cors";
+import dotenv from "dotenv";
+import Groq from "groq-sdk";
+import { GoogleGenAI } from "@google/genai";
+
+dotenv.config();
+
+const app = express();
+
+// ==========================================================
+// MIDDLEWARE
+// ==========================================================
+
+app.use(cors());
+
+app.use(
+  express.json({
+    limit: "100mb",
+  })
+);
+
+// ==========================================================
+// AI CLIENTS
+// ==========================================================
+
+const gemini = new GoogleGenAI({
+  apiKey: process.env.GEMINI_API_KEY,
+});
+
+const groq = new Groq({
+  apiKey: process.env.GROQ_API_KEY,
+});
+
+const OPENROUTER_API_KEY =
+  process.env.OPENROUTER_API_KEY;
+
+// ==========================================================
+// MODELS
+// ==========================================================
+
+// SmartDoc AI 1
+const GEMINI_MODEL =
+  "gemini-3.5-flash";
+
+// SmartDoc AI 3
+const GROQ_MODEL =
+  "llama-3.3-70b-versatile";
+
+// SmartDoc AI 2
+const OPENROUTER_MODEL =
+  "openai/gpt-oss-120b:free";
+
+// ==========================================================
+// SMARTDOC AI PROVIDERS
+// ==========================================================
+
+const PROVIDERS = {
+  GEMINI: {
+    number: 1,
+    name: "SmartDoc AI 1",
+    apiName: "Gemini",
+  },
+
+  OPENROUTER: {
+    number: 2,
+    name: "SmartDoc AI 2",
+    apiName: "OpenRouter",
+  },
+
+  GROQ: {
+    number: 3,
+    name: "SmartDoc AI 3",
+    apiName: "Groq",
+  },
+};
+
+// ==========================================================
+// CONFIGURATION
+// ==========================================================
+
+const CHUNK_SIZE = 8000;
+
+const SUMMARY_GROUP_SIZE = 3;
+
+const REQUEST_DELAY = 2500;
+
+// ==========================================================
+// WAIT
+// ==========================================================
+
+function sleep(ms) {
+  return new Promise((resolve) =>
+    setTimeout(resolve, ms)
+  );
+}
+
+// ==========================================================
+// PROVIDER TRACKING
+// ==========================================================
+
+function recordProvider(provider, tracker) {
+  if (tracker) {
+    tracker.push(provider.name);
+  }
+}
+
+function getGeneratedBy(tracker) {
+  if (!tracker || tracker.length === 0) {
+    return "SmartDoc AI";
+  }
+
+  return tracker[tracker.length - 1];
+}
+
+function getProvidersUsed(tracker) {
+  if (!tracker) {
+    return [];
+  }
+
+  return [...new Set(tracker)];
+}
+
+// ==========================================================
+// SPLIT DOCUMENT
+// ==========================================================
+
+function splitDocument(
+  text,
+  chunkSize = CHUNK_SIZE
+) {
+  const chunks = [];
+
+  let start = 0;
+
+  while (start < text.length) {
+    let end = start + chunkSize;
+
+    if (end < text.length) {
+      const paragraphBreak =
+        text.lastIndexOf("\n\n", end);
+
+      if (
+        paragraphBreak >
+        start + chunkSize * 0.6
+      ) {
+        end = paragraphBreak;
+      } else {
+        const sentenceBreak =
+          text.lastIndexOf(".", end);
+
+        if (
+          sentenceBreak >
+          start + chunkSize * 0.6
+        ) {
+          end = sentenceBreak + 1;
+        }
+      }
+    }
+
+    const chunk = text
+      .slice(start, end)
+      .trim();
+
+    if (chunk) {
+      chunks.push(chunk);
+    }
+
+    if (end <= start) {
+      end = start + chunkSize;
+    }
+
+    start = end;
+  }
+
+  return chunks;
+}
+
+// ==========================================================
+// GEMINI
+// SMARTDOC AI 1
+// ==========================================================
+
+async function askGemini(
+  messages,
+  options = {}
+) {
+  try {
+    console.log("");
+    console.log(
+      "========== AI PROVIDER 1: GEMINI =========="
+    );
+
+    console.log(
+      "Trying Gemini - SmartDoc AI 1..."
+    );
+
+    const systemMessage =
+      messages.find(
+        (message) =>
+          message.role === "system"
+      );
+
+    const userText =
+      messages
+        .filter(
+          (message) =>
+            message.role === "user"
+        )
+        .map(
+          (message) =>
+            message.content
+        )
+        .join("\n\n");
+
+    const response =
+      await gemini.models.generateContent({
+        model: GEMINI_MODEL,
+
+        contents: userText,
+
+        config: {
+          systemInstruction:
+            systemMessage?.content ||
+            "You are SmartDoc AI.",
+
+          maxOutputTokens:
+            options.maxCompletionTokens ??
+            4096,
+        },
+      });
+
+    const content =
+      response?.text;
+
+    if (!content) {
+      throw new Error(
+        "Gemini returned an empty response."
+      );
+    }
+
+    console.log(
+      "Gemini response received successfully."
+    );
+
+    console.log(
+      "Generated by: SmartDoc AI 1"
+    );
+
+    recordProvider(
+      PROVIDERS.GEMINI,
+      options.providerTracker
+    );
+
+    return content.trim();
+
+  } catch (error) {
+    console.error(
+      "Gemini request failed:",
+      error?.status || "",
+      error?.message ||
+        error
+    );
+
+    throw error;
+  }
+}
+
+// ==========================================================
+// OPENROUTER
+// SMARTDOC AI 2
+// ==========================================================
+
+async function askOpenRouter(
+  messages,
+  options = {}
+) {
+  try {
+    console.log("");
+    console.log(
+      "========== AI PROVIDER 2: OPENROUTER =========="
+    );
+
+    console.log(
+      "Trying OpenRouter - SmartDoc AI 2..."
+    );
+
+    if (!OPENROUTER_API_KEY) {
+      throw new Error(
+        "OPENROUTER_API_KEY is missing from .env"
+      );
+    }
+
+    const response =
+      await fetch(
+        "https://openrouter.ai/api/v1/chat/completions",
+        {
+          method: "POST",
+
+          headers: {
+            Authorization:
+              `Bearer ${OPENROUTER_API_KEY}`,
+
+            "Content-Type":
+              "application/json",
+
+            "HTTP-Referer":
+              "http://localhost:5173",
+
+            "X-Title":
+              "SmartDoc AI",
+          },
+
+          body: JSON.stringify({
+            model:
+              OPENROUTER_MODEL,
+
+            messages,
+
+            temperature: 0.2,
+
+            max_tokens:
+              options.maxCompletionTokens ??
+              4096,
+          }),
+        }
+      );
+
+    const data =
+      await response.json();
+
+    if (!response.ok) {
+      const error =
+        new Error(
+          data?.error?.message ||
+          `OpenRouter request failed with status ${response.status}`
+        );
+
+      error.status =
+        response.status;
+
+      error.code =
+        data?.error?.code;
+
+      throw error;
+    }
+
+    const content =
+      data
+        ?.choices?.[0]
+        ?.message?.content;
+
+    if (!content) {
+      throw new Error(
+        "OpenRouter returned an empty response."
+      );
+    }
+
+    console.log(
+      "OpenRouter response received successfully."
+    );
+
+    console.log(
+      "Generated by: SmartDoc AI 2"
+    );
+
+    recordProvider(
+      PROVIDERS.OPENROUTER,
+      options.providerTracker
+    );
+
+    return content.trim();
+
+  } catch (error) {
+    console.error(
+      "OpenRouter request failed:",
+      error?.status || "",
+      error?.message ||
+        error
+    );
+
+    throw error;
+  }
+}
+
+// ==========================================================
+// GROQ
+// SMARTDOC AI 3
+// ==========================================================
+
+async function askGroq(
+  messages,
+  options = {}
+) {
+  try {
+    console.log("");
+    console.log(
+      "========== AI PROVIDER 3: GROQ =========="
+    );
+
+    console.log(
+      "Trying Groq - SmartDoc AI 3..."
+    );
+
+    const response =
+      await groq.chat.completions.create({
+        model:
+          GROQ_MODEL,
+
+        messages,
+
+        temperature: 0.2,
+
+        max_completion_tokens:
+          options.maxCompletionTokens ??
+          4096,
+      });
+
+    const content =
+      response
+        ?.choices?.[0]
+        ?.message?.content;
+
+    if (!content) {
+      throw new Error(
+        "Groq returned an empty response."
+      );
+    }
+
+    console.log(
+      "Groq response received successfully."
+    );
+
+    console.log(
+      "Generated by: SmartDoc AI 3"
+    );
+
+    recordProvider(
+      PROVIDERS.GROQ,
+      options.providerTracker
+    );
+
+    return content.trim();
+
+  } catch (error) {
+    console.error(
+      "Groq request failed:",
+      error?.status || "",
+      error?.message ||
+        error
+    );
+
+    throw error;
+  }
+}
+
+// ==========================================================
+// CENTRAL FALLBACK
+//
+// Gemini
+//    ↓
+// OpenRouter
+//    ↓
+// Groq
+//    ↓
+// Error
+// ==========================================================
+
+async function askAI(
+  messages,
+  options = {}
+) {
+
+  // ========================================================
+  // PROVIDER 1 - GEMINI
+  // ========================================================
+
+  try {
+    const result =
+      await askGemini(
+        messages,
+        options
+      );
+
+    if (result) {
+      console.log(
+        "✅ Gemini succeeded."
+      );
+
+      return result;
+    }
+
+  } catch (error) {
+    console.log(
+      "❌ Gemini failed."
+    );
+
+    console.log(
+      "Gemini error:",
+      error?.status || "",
+      error?.message ||
+        error
+    );
+
+    console.log(
+      "➡️ Switching to OpenRouter..."
+    );
+  }
+
+  // ========================================================
+  // PROVIDER 2 - OPENROUTER
+  // ========================================================
+
+  try {
+    const result =
+      await askOpenRouter(
+        messages,
+        options
+      );
+
+    if (result) {
+      console.log(
+        "✅ OpenRouter succeeded."
+      );
+
+      return result;
+    }
+
+  } catch (error) {
+    console.log(
+      "❌ OpenRouter failed."
+    );
+
+    console.log(
+      "OpenRouter error:",
+      error?.status || "",
+      error?.message ||
+        error
+    );
+
+    console.log(
+      "➡️ Switching to Groq..."
+    );
+  }
+
+  // ========================================================
+  // PROVIDER 3 - GROQ
+  // ========================================================
+
+  try {
+    const result =
+      await askGroq(
+        messages,
+        options
+      );
+
+    if (result) {
+      console.log(
+        "✅ Groq succeeded."
+      );
+
+      return result;
+    }
+
+  } catch (error) {
+    console.log(
+      "❌ Groq failed."
+    );
+
+    console.log(
+      "Groq error:",
+      error?.status || "",
+      error?.message ||
+        error
+    );
+  }
+
+  // ========================================================
+  // ALL FAILED
+  // ========================================================
+
+  console.log("");
+
+  console.log(
+    "=========================================="
+  );
+
+  console.log(
+    "❌ ALL AI PROVIDERS FAILED"
+  );
+
+  console.log(
+    "=========================================="
+  );
+
+  throw new Error(
+    "All available AI APIs are currently unavailable."
+  );
+}
+
+// ==========================================================
+// SUMMARIZE ONE DOCUMENT CHUNK
+// ==========================================================
+
+async function summarizeChunk(
+  chunk,
+  index,
+  total,
+  options = {}
+) {
+  console.log(
+    `Processing chunk ${index}/${total}...`
+  );
+
+  console.log(
+    `Chunk characters: ${chunk.length}`
+  );
+
+  const prompt = `
+You are SmartDoc AI, an advanced Malayalam document summarization assistant.
+
+You are processing PART ${index} OF ${total} of a larger document.
+
+Read this document section carefully and create a detailed, accurate and useful Malayalam summary.
+
+IMPORTANT RULES:
+
+- Use ONLY information contained in this document section.
+- Do NOT add outside information.
+- Do NOT invent facts.
+- Do NOT assume information that is not explicitly present.
+- Preserve important names, dates, numbers, definitions, examples, procedures, findings and conclusions.
+- Do not remove important information simply to make the summary shorter.
+- Explain important concepts clearly.
+- Give enough explanation so that a student can understand the topic.
+- If the section contains technical information, explain it in simple Malayalam while keeping the original meaning.
+- If there are steps, procedures or processes, preserve them in the correct order.
+- If there are advantages, disadvantages, features, objectives, results or conclusions, include them.
+- If there are examples, include important examples.
+- Avoid unnecessary repetition.
+- Write completely in natural Malayalam.
+- Use simple Malayalam wherever possible.
+- Important English technical terms may be kept in English when necessary.
+- Do not use Markdown symbols such as #, ##, **, *, or backticks.
+- Use suitable headings when appropriate.
+
+DOCUMENT SECTION:
+
+${chunk}
+
+Now create a detailed Malayalam summary of this document section.
+`;
+
+  return askAI(
+    [
+      {
+        role: "system",
+
+        content:
+          "You are SmartDoc AI, an accurate and detailed Malayalam document summarization assistant.",
+      },
+
+      {
+        role: "user",
+
+        content: prompt,
+      },
+    ],
+
+    {
+      maxCompletionTokens:
+        4096,
+
+      providerTracker:
+        options.providerTracker,
+    }
+  );
+}
+
+// ==========================================================
+// COMBINE SUMMARIES
+// ==========================================================
+
+async function combineSummaries(
+  summaries,
+  level = 1,
+  options = {}
+) {
+  if (summaries.length === 1) {
+    return summaries[0];
+  }
+
+  console.log(
+    `Combining ${summaries.length} summaries at hierarchy level ${level}...`
+  );
+
+  const combinedText =
+    summaries
+      .map(
+        (summary, index) =>
+          `SECTION ${index + 1}:\n${summary}`
+      )
+      .join("\n\n");
+
+  const prompt = `
+You are SmartDoc AI.
+
+The following are detailed summaries of different parts of the SAME document.
+
+Combine them into ONE detailed, accurate and well-organized Malayalam summary.
+
+IMPORTANT RULES:
+
+- Use ONLY information contained in the provided summaries.
+- Do NOT add outside information.
+- Do NOT invent facts.
+- Preserve important information from every section.
+- Do not remove important facts just to make the result shorter.
+- Remove unnecessary repetition.
+- Combine related information together.
+- Preserve important names, dates, numbers, definitions, examples, procedures, findings and conclusions.
+- Maintain the original meaning of the document.
+- Give more explanation to important concepts.
+- Keep minor information shorter.
+- Make the final result useful for a student who wants to understand the document.
+- Write completely in natural Malayalam.
+- Use simple Malayalam.
+- Important English technical terms may remain in English when appropriate.
+- Do not use Markdown symbols such as #, ##, **, *, or backticks.
+
+Possible structure:
+
+മലയാളം സംഗ്രഹം
+
+1. പ്രധാന വിഷയം
+
+2. പ്രധാന ആശയങ്ങൾ
+
+3. പ്രധാന വിവരങ്ങൾ
+
+4. വിശദമായ വിശദീകരണം
+
+5. പ്രധാന പോയിന്റുകൾ
+
+6. പ്രധാന കണ്ടെത്തലുകൾ
+
+7. നിഗമനം
+
+Only use headings that are relevant.
+
+SUMMARIES:
+
+${combinedText}
+
+Now create the detailed combined Malayalam summary.
+`;
+
+  return askAI(
+    [
+      {
+        role: "system",
+
+        content:
+          "You are SmartDoc AI, an accurate and detailed Malayalam document summarization assistant.",
+      },
+
+      {
+        role: "user",
+
+        content: prompt,
+      },
+    ],
+
+    {
+      maxCompletionTokens:
+        4096,
+
+      providerTracker:
+        options.providerTracker,
+    }
+  );
+}
+
+// ==========================================================
+// LARGE DOCUMENT SUMMARY
+// ==========================================================
+
+async function createLargeDocumentSummary(
+  documentText,
+  options = {}
+) {
+  const chunks =
+    splitDocument(
+      documentText
+    );
+
+  console.log(
+    "=========================================="
+  );
+
+  console.log(
+    "Document characters:",
+    documentText.length
+  );
+
+  console.log(
+    "Number of chunks:",
+    chunks.length
+  );
+
+  console.log(
+    "=========================================="
+  );
+
+  // ========================================================
+  // SMALL DOCUMENT
+  // ========================================================
+
+  if (chunks.length === 1) {
+    console.log(
+      "Small document detected."
+    );
+
+    const prompt = `
+You are SmartDoc AI, an advanced Malayalam document summarization assistant.
+
+Read the following document carefully and create a detailed, accurate and easy-to-understand summary completely in Malayalam.
+
+IMPORTANT RULES:
+
+- Use ONLY information contained in the document.
+- Do NOT add outside information.
+- Do NOT invent facts.
+- Include important names, dates, numbers, definitions, facts, examples and conclusions.
+- Explain important concepts instead of only listing them.
+- Keep enough detail for the reader to understand the document.
+- If the document contains multiple sections or topics, organize them clearly.
+- Preserve important procedures and steps in the correct order.
+- Include important findings, results, advantages, disadvantages or recommendations when present.
+- Avoid unnecessary repetition.
+- Use simple, natural Malayalam.
+- Important English technical terms may remain in English when useful.
+- Do not use Markdown symbols such as #, ##, **, *, or backticks.
+
+Use a suitable structure such as:
+
+മലയാളം സംഗ്രഹം
+
+1. പ്രധാന വിഷയം
+
+2. പ്രധാന ആശയങ്ങൾ
+
+3. പ്രധാന വിവരങ്ങൾ
+
+4. വിശദമായ വിശദീകരണം
+
+5. പ്രധാന പോയിന്റുകൾ
+
+6. പ്രധാന കണ്ടെത്തലുകൾ
+
+7. നിഗമനം
+
+Only include sections that are relevant.
+
+DOCUMENT:
+
+${documentText}
+
+Now provide the detailed Malayalam summary.
+`;
+
+    return askAI(
+      [
+        {
+          role: "system",
+
+          content:
+            "You are SmartDoc AI, an accurate and detailed Malayalam document summarization assistant.",
+        },
+
+        {
+          role: "user",
+
+          content: prompt,
+        },
+      ],
+
+      {
+        maxCompletionTokens:
+          4096,
+
+        providerTracker:
+          options.providerTracker,
+      }
+    );
+  }
+
+  // ========================================================
+  // STAGE 1
+  // SUMMARIZE EACH CHUNK
+  // ========================================================
+
+  const chunkSummaries = [];
+
+  for (
+    let i = 0;
+    i < chunks.length;
+    i++
+  ) {
+    const summary =
+      await summarizeChunk(
+        chunks[i],
+        i + 1,
+        chunks.length,
+        options
+      );
+
+    chunkSummaries.push(
+      summary
+    );
+
+    if (
+      i <
+      chunks.length - 1
+    ) {
+      await sleep(
+        REQUEST_DELAY
+      );
+    }
+  }
+
+  console.log(
+    "All document chunks summarized."
+  );
+
+  // ========================================================
+  // STAGE 2+
+  // HIERARCHICAL COMBINATION
+  // ========================================================
+
+  let currentSummaries =
+    chunkSummaries;
+
+  let level = 1;
+
+  while (
+    currentSummaries.length >
+    1
+  ) {
+    console.log(
+      `Hierarchy level ${level}: ${currentSummaries.length} summaries`
+    );
+
+    const nextSummaries = [];
+
+    for (
+      let i = 0;
+      i < currentSummaries.length;
+      i += SUMMARY_GROUP_SIZE
+    ) {
+      const group =
+        currentSummaries.slice(
+          i,
+          i + SUMMARY_GROUP_SIZE
+        );
+
+      const combined =
+        await combineSummaries(
+          group,
+          level,
+          options
+        );
+
+      nextSummaries.push(
+        combined
+      );
+
+      if (
+        i + SUMMARY_GROUP_SIZE <
+        currentSummaries.length
+      ) {
+        await sleep(
+          REQUEST_DELAY
+        );
+      }
+    }
+
+    currentSummaries =
+      nextSummaries;
+
+    level++;
+  }
+
+  return currentSummaries[0];
+}
+
+// ==========================================================
+// TEST ROUTE
+// ==========================================================
+
+app.get(
+  "/",
+  (req, res) => {
+    res.json({
+      message:
+        "SmartDoc AI server is running",
+    });
+  }
+);
+
+// ==========================================================
+// MALAYALAM PDF SUMMARY
+// ==========================================================
+
+app.post(
+  "/api/summarize",
+
+  async (req, res) => {
+    try {
+      const {
+        documentText,
+      } = req.body;
+
+      if (!documentText) {
+        return res
+          .status(400)
+          .json({
+            error:
+              "No document text was provided.",
+          });
+      }
+
+      console.log(
+        "=========================================="
+      );
+
+      console.log(
+        "New Malayalam summary request"
+      );
+
+      console.log(
+        "Characters received:",
+        documentText.length
+      );
+
+      console.log(
+        "=========================================="
+      );
+
+      const providerTracker = [];
+
+      const summary =
+        await createLargeDocumentSummary(
+          documentText,
+          {
+            providerTracker,
+          }
+        );
+
+      if (!summary) {
+        return res
+          .status(500)
+          .json({
+            error:
+              "No summary was received.",
+          });
+      }
+
+      const generatedBy =
+        getGeneratedBy(
+          providerTracker
+        );
+
+      const providersUsed =
+        getProvidersUsed(
+          providerTracker
+        );
+
+      console.log(
+        "Final Malayalam summary generated successfully."
+      );
+
+      console.log(
+        "Generated by:",
+        generatedBy
+      );
+
+      res.json({
+        summary,
+
+        generatedBy,
+
+        providersUsed,
+      });
+
+    } catch (error) {
+      console.error(
+        "Summary Error:",
+        error
+      );
+
+      res
+        .status(500)
+        .json({
+          error:
+            "AI failed to generate the summary.",
+
+          details:
+            error?.message ||
+            "Unknown error.",
+        });
+    }
+  }
+);
+
+// ==========================================================
+// ASK QUESTION ABOUT DOCUMENT
+// ==========================================================
+
+app.post(
+  "/api/ask",
+
+  async (req, res) => {
+    try {
+      const {
+        question,
+        documentText,
+      } = req.body;
+
+      if (
+        !question ||
+        !documentText
+      ) {
+        return res
+          .status(400)
+          .json({
+            error:
+              "Question and document text are required.",
+          });
+      }
+
+      console.log(
+        "=========================================="
+      );
+
+      console.log(
+        "New document question"
+      );
+
+      console.log(
+        "Question:",
+        question
+      );
+
+      console.log(
+        "Document characters:",
+        documentText.length
+      );
+
+      console.log(
+        "=========================================="
+      );
+
+      const providerTracker = [];
+
+      // ======================================================
+      // SPLIT DOCUMENT
+      // ======================================================
+
+      const chunks =
+        splitDocument(
+          documentText
+        );
+
+      // ======================================================
+      // SMALL DOCUMENT
+      // ======================================================
+
+      if (chunks.length === 1) {
+        const prompt = `
+You are SmartDoc AI.
+
+Answer the user's question using ONLY information contained in the document.
+
+IMPORTANT RULES:
+
+- Do NOT add outside information.
+- Do NOT invent facts.
+- Give a clear and accurate answer.
+- Explain the answer enough to make it understandable.
+- If the answer is not available in the document, say:
+
+"The answer is not available in the provided document."
+
+- If the user asks in Malayalam, answer completely in Malayalam.
+- Keep the language simple and natural.
+- If useful, mention relevant names, dates, numbers or sections.
+- Do not use Markdown symbols such as #, ##, **, *, or backticks.
+
+DOCUMENT:
+
+${documentText}
+
+USER QUESTION:
+
+${question}
+
+Now provide the answer.
+`;
+
+        const answer =
+          await askAI(
+            [
+              {
+                role: "system",
+
+                content:
+                  "You are SmartDoc AI, an accurate Malayalam document question-answering assistant.",
+              },
+
+              {
+                role: "user",
+
+                content: prompt,
+              },
+            ],
+
+            {
+              maxCompletionTokens:
+                4096,
+
+              providerTracker,
+            }
+          );
+
+        return res.json({
+          answer,
+
+          generatedBy:
+            getGeneratedBy(
+              providerTracker
+            ),
+
+          providersUsed:
+            getProvidersUsed(
+              providerTracker
+            ),
+        });
+      }
+
+      // ======================================================
+      // LARGE DOCUMENT
+      // ======================================================
+
+      console.log(
+        `Large document detected. Searching ${chunks.length} chunks.`
+      );
+
+      const relevantAnswers = [];
+
+      for (
+        let i = 0;
+        i < chunks.length;
+        i++
+      ) {
+        const prompt = `
+You are SmartDoc AI.
+
+Check whether the following document section contains information that can answer the user's question.
+
+QUESTION:
+
+${question}
+
+DOCUMENT SECTION:
+
+${chunks[i]}
+
+IMPORTANT:
+
+- Use ONLY this document section.
+- Do NOT use outside knowledge.
+- Do NOT invent facts.
+- If this section does not contain useful information, reply exactly:
+
+NOT_RELEVANT
+
+- If it contains useful information, provide the relevant facts clearly.
+- Include important details needed to answer the question.
+- If the user asks in Malayalam, answer in Malayalam.
+- Do not use Markdown symbols.
+
+Return only the relevant information.
+`;
+
+        const answer =
+          await askAI(
+            [
+              {
+                role: "system",
+
+                content:
+                  "You are SmartDoc AI, an accurate document retrieval assistant.",
+              },
+
+              {
+                role: "user",
+
+                content: prompt,
+              },
+            ],
+
+            {
+              maxCompletionTokens:
+                2048,
+
+              providerTracker,
+            }
+          );
+
+        if (
+          answer &&
+          answer
+            .trim()
+            .toUpperCase() !==
+            "NOT_RELEVANT"
+        ) {
+          relevantAnswers.push(
+            answer
+          );
+        }
+
+        if (
+          i <
+          chunks.length - 1
+        ) {
+          await sleep(
+            REQUEST_DELAY
+          );
+        }
+      }
+
+      // ======================================================
+      // NOTHING RELEVANT
+      // ======================================================
+
+      if (
+        relevantAnswers.length ===
+        0
+      ) {
+        return res.json({
+          answer:
+            "The answer is not available in the provided document.",
+
+          generatedBy:
+            getGeneratedBy(
+              providerTracker
+            ),
+
+          providersUsed:
+            getProvidersUsed(
+              providerTracker
+            ),
+        });
+      }
+
+      // ======================================================
+      // FINAL ANSWER
+      // ======================================================
+
+      const finalPrompt = `
+You are SmartDoc AI.
+
+Answer the user's question using ONLY the relevant information retrieved from the document.
+
+QUESTION:
+
+${question}
+
+RELEVANT DOCUMENT INFORMATION:
+
+${relevantAnswers.join(
+  "\n\n"
+)}
+
+IMPORTANT RULES:
+
+- Do NOT add outside information.
+- Do NOT invent facts.
+- Combine the relevant information accurately.
+- Remove unnecessary repetition.
+- Explain the answer clearly.
+- Include important details from the retrieved sections.
+- If the answer is not available, say:
+
+"The answer is not available in the provided document."
+
+- If the user asks in Malayalam, answer completely in Malayalam.
+- Keep the answer simple and easy to understand.
+- Do not use Markdown symbols such as #, ##, **, *, or backticks.
+
+Now provide the final answer.
+`;
+
+      const finalAnswer =
+        await askAI(
+          [
+            {
+              role: "system",
+
+              content:
+                "You are SmartDoc AI, an accurate and detailed Malayalam document question-answering assistant.",
+            },
+
+            {
+              role: "user",
+
+              content:
+                finalPrompt,
+            },
+          ],
+
+          {
+            maxCompletionTokens:
+              4096,
+
+            providerTracker,
+          }
+        );
+
+      console.log(
+        "AI answer received successfully."
+      );
+
+      console.log(
+        "Generated by:",
+        getGeneratedBy(
+          providerTracker
+        )
+      );
+
+      res.json({
+        answer:
+          finalAnswer,
+
+        generatedBy:
+          getGeneratedBy(
+            providerTracker
+          ),
+
+        providersUsed:
+          getProvidersUsed(
+            providerTracker
+          ),
+      });
+
+    } catch (error) {
+      console.error(
+        "Ask Error:",
+        error
+      );
+
+      res
+        .status(500)
+        .json({
+          error:
+            "AI failed to answer the question.",
+
+          details:
+            error?.message ||
+            "Unknown error.",
+        });
+    }
+  }
+);
+
+// ==========================================================
+// START SERVER
+// ==========================================================
+
+const PORT = 5000;
+
+app.listen(
+  PORT,
+  () => {
+    console.log(
+      `SmartDoc AI server running on http://localhost:${PORT}`
+    );
+
+    console.log(
+      "=========================================="
+    );
+
+    console.log(
+      "AI FALLBACK SYSTEM"
+    );
+
+    console.log(
+      "1. Gemini     → SmartDoc AI 1"
+    );
+
+    console.log(
+      "2. OpenRouter → SmartDoc AI 2"
+    );
+
+    console.log(
+      "3. Groq       → SmartDoc AI 3"
+    );
+
+    console.log(
+      "=========================================="
+    );
+  }
+);

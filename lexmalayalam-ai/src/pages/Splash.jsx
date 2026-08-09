@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import "./Splash.css";
 
 export default function Splash({
-  duration = 3000,
+  duration = 1000,
   hideNavigation = false,
 }) {
   const navigate = useNavigate();
