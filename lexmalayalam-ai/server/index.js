@@ -999,7 +999,7 @@ Now provide the detailed Malayalam summary.
 // ==========================================================
 
 app.get(
-  "/",
+  "/api",
   (req, res) => {
     res.json({
       message:
