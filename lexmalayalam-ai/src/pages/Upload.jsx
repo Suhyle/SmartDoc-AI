@@ -303,7 +303,7 @@ export default function Upload() {
 
       // Send PDF text to Express + Groq backend
       const response = await fetch(
-        'http://localhost:5000/api/ask',
+        '/api/ask',
         {
           method: 'POST',
           headers: {
