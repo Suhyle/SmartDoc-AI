@@ -326,24 +326,34 @@ async function askOpenRouter(
         }
       );
 
-    const data =
-      await response.json();
+    const rawResponse = await response.text();
 
-    if (!response.ok) {
-      const error =
-        new Error(
-          data?.error?.message ||
-          `OpenRouter request failed with status ${response.status}`
-        );
+let data = {};
 
-      error.status =
-        response.status;
+try {
+    data = rawResponse ? JSON.parse(rawResponse) : {};
+} catch (parseError) {
+    console.error("OpenRouter returned invalid JSON:", rawResponse);
 
-      error.code =
-        data?.error?.code;
+    const error = new Error(
+        `OpenRouter returned an invalid response (HTTP ${response.status})`
+    );
 
-      throw error;
-    }
+    error.status = response.status;
+    throw error;
+}
+
+if (!response.ok) {
+    const error = new Error(
+        data?.error?.message ||
+        `OpenRouter request failed with status ${response.status}`
+    );
+
+    error.status = response.status;
+    error.code = data?.error?.code;
+
+    throw error;
+}
 
     const content =
       data
