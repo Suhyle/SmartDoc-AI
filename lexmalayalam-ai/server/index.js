@@ -1478,37 +1478,4 @@ Now provide the final answer.
 // START SERVER
 // ==========================================================
 
-const PORT = 5000;
-
-app.listen(
-  PORT,
-  () => {
-    console.log(
-      `SmartDoc AI server running on http://localhost:${PORT}`
-    );
-
-    console.log(
-      "=========================================="
-    );
-
-    console.log(
-      "AI FALLBACK SYSTEM"
-    );
-
-    console.log(
-      "1. Gemini     → SmartDoc AI 1"
-    );
-
-    console.log(
-      "2. OpenRouter → SmartDoc AI 2"
-    );
-
-    console.log(
-      "3. Groq       → SmartDoc AI 3"
-    );
-
-    console.log(
-      "=========================================="
-    );
-  }
-);
+export default app;
