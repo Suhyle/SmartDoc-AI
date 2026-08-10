@@ -57,6 +57,13 @@ export default function Upload() {
   const [isSpeaking, setIsSpeaking] = useState(false)
   const [copyState, setCopyState] = useState('idle')
 
+  // API base URL for both Vercel web and Capacitor Android.
+  // In the Android WebView, "/api/ask" would point to capacitor://localhost.
+  const API_BASE_URL = (
+    import.meta.env.VITE_API_BASE_URL ||
+    'https://smart-doc-ai-two.vercel.app'
+  ).replace(/\/$/, '')
+
   // ---------------------------------------
   // Choose PDF
   // ---------------------------------------
@@ -277,100 +284,240 @@ export default function Upload() {
   // Generate Malayalam Summary
   // ---------------------------------------
 
-  const handleGenerateSummary = async () => {
-    try {
-      setError('')
-      setSummary('')
-      setIsSummarizing(true)
+  // ---------------------------------------
+// Generate Malayalam Summary
+// ---------------------------------------
 
-      const documentText = sessionStorage.getItem(
-        'smartdoc_pdf_text'
-      )
+const handleGenerateSummary = async () => {
+  try {
+    setError('')
+    setSummary('')
+    setIsSummarizing(true)
 
-      if (!documentText) {
-        setError(
-          'No PDF text found. Please read the PDF again.'
-        )
-        setIsSummarizing(false)
-        return
-      }
+    const documentText = sessionStorage.getItem(
+      'smartdoc_pdf_text'
+    )
 
-      console.log('Sending question to Groq...')
-      console.log(
-        'Document characters:',
-        documentText.length
-      )
-
-      // Send PDF text to Express + Groq backend
-      const response = await fetch(
-        '/api/ask',
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            question:
-              'Generate a clear and professional Malayalam summary of this document.',
-            documentText: documentText,
-          }),
-        }
-      )
-
-      const data = await response.json()
-
-      console.log('Groq server response:', data)
-
-      if (!response.ok) {
-        throw new Error(
-          data.error ||
-            data.message ||
-            'Failed to generate summary.'
-        )
-      }
-
-      // Support different backend response names
-      const generatedSummary =
-        data.summary ||
-        data.answer ||
-        data.response ||
-        data.result ||
-        data.text
-
-      if (
-        !generatedSummary ||
-        typeof generatedSummary !== 'string' ||
-        generatedSummary.trim().length === 0
-      ) {
-        console.error(
-          'Groq returned a response, but no usable summary field was found:',
-          data
-        )
-
-        throw new Error(
-          'Groq responded, but the summary text was not found in the server response.'
-        )
-      }
-
-      setSummary(generatedSummary.trim())
-
-      console.log(
-        'Malayalam summary generated successfully.'
-      )
-    } catch (err) {
-      console.error(
-        'Malayalam summary error:',
-        err
-      )
-
+    if (!documentText) {
       setError(
-        err.message ||
-          'Unable to generate Malayalam summary. Please try again.'
+        'No PDF text found. Please read the PDF again.'
       )
-    } finally {
       setIsSummarizing(false)
+      return
     }
+
+    console.log(
+      'Sending document to SmartDoc AI summary API...'
+    )
+
+    console.log(
+      'Document characters:',
+      documentText.length
+    )
+
+    console.log(
+      'Document pages:',
+      pageCount
+    )
+
+    // --------------------------------------------------
+    // IMPORTANT:
+    // Use /api/summarize for document summarization.
+    // Do NOT use /api/ask here.
+    // --------------------------------------------------
+
+    const apiUrl =
+      `${API_BASE_URL}/api/summarize`
+
+    console.log(
+      'Calling SmartDoc API:',
+      apiUrl
+    )
+
+    const response = await fetch(
+      apiUrl,
+      {
+        method: 'POST',
+
+        headers: {
+          'Content-Type':
+            'application/json',
+        },
+
+        body: JSON.stringify({
+          documentText:
+            documentText,
+        }),
+      }
+    )
+
+    // --------------------------------------------------
+    // Read response safely
+    // --------------------------------------------------
+
+    const contentType =
+      response.headers.get(
+        'content-type'
+      ) || ''
+
+    const responseText =
+      await response.text()
+
+    console.log(
+      'API status:',
+      response.status
+    )
+
+    console.log(
+      'API content type:',
+      contentType
+    )
+
+    // --------------------------------------------------
+    // Prevent:
+    // Unexpected token '<'
+    // --------------------------------------------------
+
+    if (
+      !contentType.includes(
+        'application/json'
+      )
+    ) {
+      console.error(
+        'SmartDoc API returned non-JSON:',
+        responseText.slice(
+          0,
+          500
+        )
+      )
+
+      throw new Error(
+        `SmartDoc API returned ${response.status} instead of JSON. ` +
+        `Please check the deployed backend.`
+      )
+    }
+
+    // --------------------------------------------------
+    // Convert response to JSON
+    // --------------------------------------------------
+
+    let data
+
+    try {
+      data =
+        JSON.parse(
+          responseText
+        )
+    } catch (parseError) {
+      console.error(
+        'Invalid JSON response:',
+        responseText
+      )
+
+      throw new Error(
+        'SmartDoc API returned invalid JSON.'
+      )
+    }
+
+    console.log(
+      'SmartDoc AI response:',
+      data
+    )
+
+    // --------------------------------------------------
+    // Backend error
+    // --------------------------------------------------
+
+    if (!response.ok) {
+      throw new Error(
+        data?.error ||
+        data?.message ||
+        'Failed to generate Malayalam summary.'
+      )
+    }
+
+    // --------------------------------------------------
+    // Get summary
+    // --------------------------------------------------
+
+    const generatedSummary =
+      data?.summary ||
+      data?.answer ||
+      data?.response ||
+      data?.result ||
+      data?.text
+
+    if (
+      !generatedSummary ||
+      typeof generatedSummary !==
+        'string' ||
+      generatedSummary
+        .trim()
+        .length === 0
+    ) {
+      console.error(
+        'No summary found in API response:',
+        data
+      )
+
+      throw new Error(
+        'The AI responded, but no summary text was returned.'
+      )
+    }
+
+    // --------------------------------------------------
+    // Display summary
+    // --------------------------------------------------
+
+    setSummary(
+      generatedSummary.trim()
+    )
+
+    console.log(
+      'Malayalam summary generated successfully.'
+    )
+
+    // --------------------------------------------------
+    // Show which AI provider generated it
+    // --------------------------------------------------
+
+    if (
+      data?.generatedBy
+    ) {
+      console.log(
+        'Generated by:',
+        data.generatedBy
+      )
+    }
+
+    if (
+      data?.providersUsed
+    ) {
+      console.log(
+        'Providers used:',
+        data.providersUsed
+      )
+    }
+
+  } catch (err) {
+
+    console.error(
+      'Malayalam summary error:',
+      err
+    )
+
+    setError(
+      err?.message ||
+      'Unable to generate Malayalam summary. Please try again.'
+    )
+
+  } finally {
+
+    setIsSummarizing(
+      false
+    )
   }
+}
 
   // ---------------------------------------
   // Listen to Summary
