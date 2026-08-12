@@ -111,7 +111,7 @@ export default function EmailVerified() {
         </p>
 
         <p className="verified-footer-tagline">
-          Upload Documents. Get AI-Powered Summaries.
+          Select Video. Get AI-Powered Summaries.
         </p>
 
         <p className="verified-footer-copy">

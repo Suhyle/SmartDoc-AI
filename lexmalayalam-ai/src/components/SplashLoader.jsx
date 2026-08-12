@@ -7,13 +7,13 @@ function SplashLoader({ children }) {
   useEffect(() => {
     const timer = setTimeout(() => {
       setLoading(false);
-    }, 2000);
+    }, 3000);
 
     return () => clearTimeout(timer);
   }, []);
 
   if (loading) {
-    return <Splash duration={2000} hideNavigation={true} />;
+    return <Splash duration={4000} hideNavigation={true} />;
   }
 
   return children;
