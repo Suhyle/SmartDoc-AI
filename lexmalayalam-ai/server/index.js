@@ -3347,25 +3347,13 @@ ${combinedTranscript}
 // START SERVER
 // ==========================================================
 
-app.listen(
-  PORT,
-  () => {
+export default app;
 
-    console.log(
-      "========================================"
-    );
-
-    console.log(
-      "SmartDoc AI backend started"
-    );
-
-    console.log(
-      `Server running on port ${PORT}`
-    );
-
-    console.log(
-      "========================================"
-    );
-
-  }
-);
+if (process.env.NODE_ENV !== "production") {
+  app.listen(PORT, () => {
+    console.log("========================================");
+    console.log("SmartDoc AI backend started");
+    console.log(`Server running on port ${PORT}`);
+    console.log("========================================");
+  });
+}
