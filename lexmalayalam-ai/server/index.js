@@ -2,9 +2,15 @@ import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 import Groq from "groq-sdk";
+import Cerebras from "@cerebras/cerebras_cloud_sdk";
 import { GoogleGenAI } from "@google/genai";
+import { YoutubeTranscript } from "youtube-transcript";
 
 dotenv.config();
+
+// ==========================================================
+// EXPRESS APP
+// ==========================================================
 
 const app = express();
 
@@ -20,560 +26,261 @@ app.use(
   })
 );
 
-app.use((req, res, next) => {
-  res.setHeader("Cache-Control", "no-store");
-  next();
-});
-
 // ==========================================================
-// ERROR HELPER
+// ENVIRONMENT VARIABLES
 // ==========================================================
 
-function sendError(res, status, message, details = "") {
-  return res.status(status).json({
-    error: message,
-    ...(details ? { details } : {}),
-  });
-}
+const PORT = process.env.PORT || 5000;
+
+const GEMINI_API_KEY =
+  process.env.GEMINI_API_KEY;
+
+const GROQ_API_KEY =
+  process.env.GROQ_API_KEY;
+
+const CEREBRAS_API_KEY =
+  process.env.CEREBRAS_API_KEY;
 
 // ==========================================================
 // AI CLIENTS
 // ==========================================================
 
 const gemini = new GoogleGenAI({
-  apiKey: process.env.GEMINI_API_KEY,
+  apiKey: GEMINI_API_KEY,
 });
 
 const groq = new Groq({
-  apiKey: process.env.GROQ_API_KEY,
+  apiKey: GROQ_API_KEY,
 });
 
-const OPENROUTER_API_KEY =
-  process.env.OPENROUTER_API_KEY;
+const cerebras = new Cerebras({
+  apiKey: CEREBRAS_API_KEY,
+});
 
 // ==========================================================
 // AI MODELS
 // ==========================================================
 
-const GEMINI_MODEL = "gemini-3.5-flash";
+const GEMINI_MODEL =
+  "gemini-3.5-flash";
 
-const OPENROUTER_MODEL =
-  "openai/gpt-oss-120b:free";
+const CEREBRAS_MODEL =
+  "gpt-oss-120b";
 
 const GROQ_MODEL =
   "llama-3.3-70b-versatile";
 
 // ==========================================================
-// PROVIDERS
+// PROVIDER NAMES
 // ==========================================================
 
 const PROVIDERS = {
   GEMINI: "SmartDoc AI 1",
-  OPENROUTER: "SmartDoc AI 2",
+  CEREBRAS: "SmartDoc AI 2",
   GROQ: "SmartDoc AI 3",
 };
 
 // ==========================================================
-// CONFIGURATION
+// HELPER - RECORD PROVIDER
 // ==========================================================
 
-// Size of each document section sent to AI
-const CHUNK_SIZE = 7000;
-
-// Number of summaries combined at one time
-const SUMMARY_GROUP_SIZE = 4;
-
-// Delay between AI requests
-const REQUEST_DELAY = 1200;
-
-// Maximum document size
-const MAX_DOCUMENT_CHARACTERS = 20000000;
-
-// Maximum question size
-const MAX_QUESTION_CHARACTERS = 10000;
-
-// ==========================================================
-// WAIT
-// ==========================================================
-
-function sleep(ms) {
-  return new Promise((resolve) => {
-    setTimeout(resolve, ms);
-  });
-}
-
-// ==========================================================
-// PROVIDER TRACKING
-// ==========================================================
-
-function recordProvider(provider, tracker) {
+function recordProvider(
+  provider,
+  tracker
+) {
   if (tracker) {
     tracker.push(provider);
   }
 }
 
-function getGeneratedBy(tracker) {
-  if (!tracker || tracker.length === 0) {
-    return "SmartDoc AI";
-  }
-
-  return tracker[tracker.length - 1];
-}
-
-function getProvidersUsed(tracker) {
-  if (!tracker) {
-    return [];
-  }
-
-  return [...new Set(tracker)];
-}
-
-// ==========================================================
-// DOCUMENT CLEANING
-// ==========================================================
-
-function normalizeDocumentText(text) {
-  if (typeof text !== "string") {
-    return "";
-  }
-
-  return text
-    .replace(/\u0000/g, "")
-    .replace(/\r\n/g, "\n")
-    .replace(/\r/g, "\n")
-    .replace(/[ \t]+\n/g, "\n")
-    .replace(/\n{4,}/g, "\n\n")
-    .trim();
-}
-
-// ==========================================================
-// DOCUMENT VALIDATION
-// ==========================================================
-
-function validateDocument(text) {
-  const documentText =
-    normalizeDocumentText(text);
-
-  if (!documentText) {
-    const error = new Error(
-      "No readable text was extracted from the document."
-    );
-
-    error.status = 400;
-
-    throw error;
-  }
-
-  if (
-    documentText.length >
-    MAX_DOCUMENT_CHARACTERS
-  ) {
-    const error = new Error(
-      "Document is too large for the current server limit."
-    );
-
-    error.status = 413;
-
-    throw error;
-  }
-
-  return documentText;
-}
-
-// ==========================================================
-// QUESTION CLEANING
-// ==========================================================
-
-function normalizeQuestion(question) {
-  return String(question || "")
-    .trim()
-    .slice(0, MAX_QUESTION_CHARACTERS);
-}
-
-// ==========================================================
-// DOCUMENT INFORMATION
-// ==========================================================
-
-function getDocumentStats(documentText) {
-  const words =
-    documentText
-      .split(/\s+/)
-      .filter(Boolean).length;
-
-  return {
-    characters: documentText.length,
-    words,
-    estimatedPages: Math.max(
-      1,
-      Math.ceil(documentText.length / 3000)
-    ),
-  };
-}
-
-// ==========================================================
-// SPLIT LARGE DOCUMENT
-// ==========================================================
-
-function splitDocument(
-  text,
-  chunkSize = CHUNK_SIZE
-) {
-  const documentText =
-    normalizeDocumentText(text);
-
-  if (!documentText) {
-    return [];
-  }
-
-  const chunks = [];
-
-  let start = 0;
-
-  while (start < documentText.length) {
-    let end = Math.min(
-      start + chunkSize,
-      documentText.length
-    );
-
-    if (end < documentText.length) {
-
-      // Try paragraph boundary
-      const paragraphBreak =
-        documentText.lastIndexOf(
-          "\n\n",
-          end
-        );
-
-      if (
-        paragraphBreak >
-        start + chunkSize * 0.55
-      ) {
-        end = paragraphBreak;
-      }
-
-      // Try sentence boundary
-      else {
-        const sentenceBreak =
-          documentText.lastIndexOf(
-            ".",
-            end
-          );
-
-        if (
-          sentenceBreak >
-          start + chunkSize * 0.55
-        ) {
-          end =
-            sentenceBreak + 1;
-        }
-
-        // Otherwise try space
-        else {
-          const spaceBreak =
-            documentText.lastIndexOf(
-              " ",
-              end
-            );
-
-          if (
-            spaceBreak >
-            start + chunkSize * 0.55
-          ) {
-            end = spaceBreak;
-          }
-        }
-      }
-    }
-
-    const chunk =
-      documentText
-        .slice(start, end)
-        .trim();
-
-    if (chunk) {
-      chunks.push(chunk);
-    }
-
-    if (end <= start) {
-      end =
-        start + chunkSize;
-    }
-
-    start = end;
-  }
-
-  return chunks;
-}
-
 // ==========================================================
 // GEMINI
-// SMARTDOC AI 1
 // ==========================================================
 
 async function askGemini(
   messages,
   options = {}
 ) {
-  try {
+  console.log(
+    "Trying Gemini..."
+  );
 
-    console.log(
-      "Trying Gemini - SmartDoc AI 1..."
+  if (!GEMINI_API_KEY) {
+    throw new Error(
+      "GEMINI_API_KEY is missing."
     );
-
-    const systemMessage =
-      messages.find(
-        (message) =>
-          message.role === "system"
-      );
-
-    const userText =
-      messages
-        .filter(
-          (message) =>
-            message.role === "user"
-        )
-        .map(
-          (message) =>
-            message.content
-        )
-        .join("\n\n");
-
-    const response =
-      await gemini.models.generateContent({
-
-        model:
-          GEMINI_MODEL,
-
-        contents:
-          userText,
-
-        config: {
-
-          systemInstruction:
-            systemMessage?.content ||
-            "You are SmartDoc AI.",
-
-          maxOutputTokens:
-            options.maxCompletionTokens ||
-            4096,
-        },
-      });
-
-    const content =
-      response?.text;
-
-    if (!content) {
-      throw new Error(
-        "Gemini returned an empty response."
-      );
-    }
-
-    recordProvider(
-      PROVIDERS.GEMINI,
-      options.providerTracker
-    );
-
-    console.log(
-      "Gemini succeeded."
-    );
-
-    return content.trim();
-
-  } catch (error) {
-
-    console.error(
-      "Gemini failed:",
-      error?.message ||
-        error
-    );
-
-    throw error;
   }
+
+  const systemMessage =
+    messages.find(
+      (message) =>
+        message.role === "system"
+    );
+
+  const userText =
+    messages
+      .filter(
+        (message) =>
+          message.role === "user"
+      )
+      .map(
+        (message) =>
+          message.content
+      )
+      .join("\n\n");
+
+  const response =
+    await gemini.models.generateContent({
+      model: GEMINI_MODEL,
+
+      contents: userText,
+
+      config: {
+        systemInstruction:
+          systemMessage?.content ||
+          "You are SmartDoc AI.",
+
+        maxOutputTokens:
+          options.maxCompletionTokens ||
+          4096,
+      },
+    });
+
+  const content =
+    response?.text;
+
+  if (!content) {
+    throw new Error(
+      "Gemini returned an empty response."
+    );
+  }
+
+  recordProvider(
+    PROVIDERS.GEMINI,
+    options.providerTracker
+  );
+
+  console.log(
+    "Gemini succeeded."
+  );
+
+  return content.trim();
 }
 
 // ==========================================================
-// OPENROUTER
-// SMARTDOC AI 2
+// CEREBRAS
 // ==========================================================
 
-async function askOpenRouter(
+async function askCerebras(
   messages,
   options = {}
 ) {
-  try {
+  console.log(
+    "Trying Cerebras..."
+  );
 
-    console.log(
-      "Trying OpenRouter - SmartDoc AI 2..."
+  if (!CEREBRAS_API_KEY) {
+    throw new Error(
+      "CEREBRAS_API_KEY is missing."
     );
-
-    if (!OPENROUTER_API_KEY) {
-      throw new Error(
-        "OPENROUTER_API_KEY is missing."
-      );
-    }
-
-    const response =
-      await fetch(
-        "https://openrouter.ai/api/v1/chat/completions",
-        {
-          method: "POST",
-
-          headers: {
-
-            Authorization:
-              `Bearer ${OPENROUTER_API_KEY}`,
-
-            "Content-Type":
-              "application/json",
-
-            "HTTP-Referer":
-              "http://localhost:5173",
-
-            "X-Title":
-              "SmartDoc AI",
-          },
-
-          body: JSON.stringify({
-
-            model:
-              OPENROUTER_MODEL,
-
-            messages,
-
-            temperature: 0.2,
-
-            max_tokens:
-              options.maxCompletionTokens ||
-              4096,
-          }),
-        }
-      );
-
-    const rawResponse =
-      await response.text();
-
-    let data = {};
-
-    try {
-
-      data =
-        rawResponse
-          ? JSON.parse(
-              rawResponse
-            )
-          : {};
-
-    } catch {
-
-      throw new Error(
-        `OpenRouter returned invalid JSON. HTTP ${response.status}`
-      );
-    }
-
-    if (!response.ok) {
-
-      throw new Error(
-        data?.error?.message ||
-        `OpenRouter failed. HTTP ${response.status}`
-      );
-    }
-
-    const content =
-      data
-        ?.choices?.[0]
-        ?.message?.content;
-
-    if (!content) {
-      throw new Error(
-        "OpenRouter returned an empty response."
-      );
-    }
-
-    recordProvider(
-      PROVIDERS.OPENROUTER,
-      options.providerTracker
-    );
-
-    console.log(
-      "OpenRouter succeeded."
-    );
-
-    return content.trim();
-
-  } catch (error) {
-
-    console.error(
-      "OpenRouter failed:",
-      error?.message ||
-        error
-    );
-
-    throw error;
   }
+
+  const response =
+    await cerebras.chat.completions.create({
+      model: CEREBRAS_MODEL,
+
+      messages,
+
+      temperature: 0.2,
+
+      // Cerebras fallback limit.
+      // The current free tier supports a much larger
+      // token-per-minute allowance than Groq.
+      max_completion_tokens:
+        Math.min(
+          options.maxCompletionTokens || 8192,
+          8192
+        ),
+    });
+
+  const content =
+    response?.choices?.[0]?.message
+      ?.content;
+
+  if (!content) {
+    throw new Error(
+      "Cerebras returned an empty response."
+    );
+  }
+
+  recordProvider(
+    PROVIDERS.CEREBRAS,
+    options.providerTracker
+  );
+
+  console.log(
+    "Cerebras succeeded."
+  );
+
+  return content.trim();
 }
 
 // ==========================================================
 // GROQ
-// SMARTDOC AI 3
 // ==========================================================
 
 async function askGroq(
   messages,
   options = {}
 ) {
-  try {
+  console.log(
+    "Trying Groq..."
+  );
 
-    console.log(
-      "Trying Groq - SmartDoc AI 3..."
+  if (!GROQ_API_KEY) {
+    throw new Error(
+      "GROQ_API_KEY is missing."
     );
-
-    const response =
-      await groq.chat.completions.create({
-
-        model:
-          GROQ_MODEL,
-
-        messages,
-
-        temperature: 0.2,
-
-        max_completion_tokens:
-          options.maxCompletionTokens ||
-          4096,
-      });
-
-    const content =
-      response
-        ?.choices?.[0]
-        ?.message?.content;
-
-    if (!content) {
-      throw new Error(
-        "Groq returned an empty response."
-      );
-    }
-
-    recordProvider(
-      PROVIDERS.GROQ,
-      options.providerTracker
-    );
-
-    console.log(
-      "Groq succeeded."
-    );
-
-    return content.trim();
-
-  } catch (error) {
-
-    console.error(
-      "Groq failed:",
-      error?.message ||
-        error
-    );
-
-    throw error;
   }
+
+  const response =
+    await groq.chat.completions.create({
+      model: GROQ_MODEL,
+
+      messages,
+
+      temperature: 0.2,
+
+      // Keep Groq fallback output limited.
+      // This helps reduce the chance of the previous
+      // tokens-per-minute / request-too-large error.
+      max_completion_tokens:
+        Math.min(
+          options.maxCompletionTokens || 4096,
+          4096
+        ),
+    });
+
+  const content =
+    response?.choices?.[0]?.message
+      ?.content;
+
+  if (!content) {
+    throw new Error(
+      "Groq returned an empty response."
+    );
+  }
+
+  recordProvider(
+    PROVIDERS.GROQ,
+    options.providerTracker
+  );
+
+  console.log(
+    "Groq succeeded."
+  );
+
+  return content.trim();
 }
 
 // ==========================================================
@@ -581,7 +288,7 @@ async function askGroq(
 //
 // Gemini
 //    ↓
-// OpenRouter
+// Cerebras
 //    ↓
 // Groq
 //    ↓
@@ -609,21 +316,27 @@ async function askAI(
       return result;
     }
 
-  } catch {
+  } catch (error) {
+
+    console.error(
+      "Gemini failed:",
+      error?.message ||
+        error
+    );
 
     console.log(
-      "Switching from Gemini to OpenRouter..."
+      "Switching to Cerebras..."
     );
   }
 
   // --------------------------------------------------------
-  // OPENROUTER
+  // CEREBRAS
   // --------------------------------------------------------
 
   try {
 
     const result =
-      await askOpenRouter(
+      await askCerebras(
         messages,
         options
       );
@@ -632,10 +345,16 @@ async function askAI(
       return result;
     }
 
-  } catch {
+  } catch (error) {
+
+    console.error(
+      "Cerebras failed:",
+      error?.message ||
+        error
+    );
 
     console.log(
-      "Switching from OpenRouter to Groq..."
+      "Switching to Groq..."
     );
   }
 
@@ -655,385 +374,764 @@ async function askAI(
       return result;
     }
 
-  } catch {
+  } catch (error) {
 
-    console.log(
-      "Groq also failed."
+    console.error(
+      "Groq failed:",
+      error?.message ||
+        error
     );
   }
 
   throw new Error(
-    "All available AI APIs are currently unavailable."
+    "All SmartDoc AI providers are currently unavailable."
   );
 }
 
 // ==========================================================
-// SUMMARIZE ONE CHUNK
+// YOUTUBE VIDEO ID HELPER
 // ==========================================================
 
-async function summarizeChunk(
-  chunk,
-  index,
-  total,
-  options = {}
+function getYouTubeVideoId(
+  videoUrl
 ) {
 
-  console.log(
-    `Processing chunk ${index}/${total}`
-  );
+  try {
 
-  const prompt = `
+    const url =
+      new URL(videoUrl);
 
-You are SmartDoc AI.
+    const hostname =
+      url.hostname.toLowerCase();
 
-You are processing PART ${index} OF ${total}
-of a larger document.
-
-Create a detailed and accurate Malayalam
-summary of this document section.
-
-IMPORTANT RULES:
-
-- Use ONLY information in this section.
-- Do NOT add outside information.
-- Do NOT invent facts.
-- Preserve names.
-- Preserve dates.
-- Preserve numbers.
-- Preserve definitions.
-- Preserve examples.
-- Preserve procedures.
-- Preserve findings.
-- Preserve conclusions.
-- Explain important concepts clearly.
-- Use simple natural Malayalam.
-- Keep important English technical terms when necessary.
-- Avoid unnecessary repetition.
-- Do not use Markdown symbols.
-
-DOCUMENT SECTION:
-
-${chunk}
-
-Now create the detailed Malayalam summary.
-`;
-
-  return askAI(
-    [
-      {
-        role: "system",
-
-        content:
-          "You are SmartDoc AI, an accurate Malayalam document summarization assistant.",
-      },
-
-      {
-        role: "user",
-
-        content:
-          prompt,
-      },
-    ],
-
-    {
-      maxCompletionTokens:
-        4096,
-
-      providerTracker:
-        options.providerTracker,
-    }
-  );
-}
-
-// ==========================================================
-// COMBINE SUMMARIES
-// ==========================================================
-
-async function combineSummaries(
-  summaries,
-  options = {}
-) {
-
-  if (summaries.length === 1) {
-    return summaries[0];
-  }
-
-  const combinedText =
-    summaries
-      .map(
-        (summary, index) =>
-          `SECTION ${index + 1}:\n${summary}`
-      )
-      .join("\n\n");
-
-  const prompt = `
-
-You are SmartDoc AI.
-
-The following are summaries of
-different sections of the SAME document.
-
-Combine them into ONE detailed,
-accurate Malayalam summary.
-
-IMPORTANT RULES:
-
-- Use ONLY the provided summaries.
-- Do NOT add outside information.
-- Do NOT invent facts.
-- Preserve important information.
-- Remove unnecessary repetition.
-- Combine related information.
-- Preserve names.
-- Preserve dates.
-- Preserve numbers.
-- Preserve definitions.
-- Preserve examples.
-- Preserve procedures.
-- Preserve findings.
-- Preserve conclusions.
-- Use simple Malayalam.
-- Keep important English technical terms.
-- Do not use Markdown symbols.
-
-Suggested structure:
-
-മലയാളം സംഗ്രഹം
-
-1. പ്രധാന വിഷയം
-
-2. പ്രധാന ആശയങ്ങൾ
-
-3. പ്രധാന വിവരങ്ങൾ
-
-4. വിശദമായ വിശദീകരണം
-
-5. പ്രധാന പോയിന്റുകൾ
-
-6. പ്രധാന കണ്ടെത്തലുകൾ
-
-7. നിഗമനം
-
-Only use sections that are relevant.
-
-SUMMARIES:
-
-${combinedText}
-
-Now create the final Malayalam summary.
-`;
-
-  return askAI(
-    [
-      {
-        role: "system",
-
-        content:
-          "You are SmartDoc AI, an accurate Malayalam document summarization assistant.",
-      },
-
-      {
-        role: "user",
-
-        content:
-          prompt,
-      },
-    ],
-
-    {
-      maxCompletionTokens:
-        4096,
-
-      providerTracker:
-        options.providerTracker,
-    }
-  );
-}
-
-// ==========================================================
-// LARGE DOCUMENT SUMMARY
-// ==========================================================
-
-async function createLargeDocumentSummary(
-  documentText,
-  options = {}
-) {
-
-  const chunks =
-    splitDocument(
-      documentText
-    );
-
-  console.log(
-    "Document characters:",
-    documentText.length
-  );
-
-  console.log(
-    "Document chunks:",
-    chunks.length
-  );
-
-  // --------------------------------------------------------
-  // SMALL DOCUMENT
-  // --------------------------------------------------------
-
-  if (chunks.length === 1) {
-
-    const prompt = `
-
-You are SmartDoc AI.
-
-Read this document carefully and
-create a detailed Malayalam summary.
-
-RULES:
-
-- Use ONLY the document.
-- Do NOT add outside information.
-- Do NOT invent facts.
-- Preserve important names.
-- Preserve dates.
-- Preserve numbers.
-- Preserve definitions.
-- Preserve examples.
-- Preserve procedures.
-- Preserve findings.
-- Preserve conclusions.
-- Explain important concepts.
-- Use simple Malayalam.
-- Keep important English technical terms.
-- Avoid unnecessary repetition.
-- Do not use Markdown symbols.
-
-DOCUMENT:
-
-${documentText}
-
-Now provide the detailed Malayalam summary.
-`;
-
-    return askAI(
-      [
-        {
-          role: "system",
-
-          content:
-            "You are SmartDoc AI, an accurate Malayalam document summarization assistant.",
-        },
-
-        {
-          role: "user",
-
-          content:
-            prompt,
-        },
-      ],
-
-      {
-        maxCompletionTokens:
-          4096,
-
-        providerTracker:
-          options.providerTracker,
-      }
-    );
-  }
-
-  // --------------------------------------------------------
-  // LARGE DOCUMENT
-  // --------------------------------------------------------
-
-  const chunkSummaries = [];
-
-  for (
-    let i = 0;
-    i < chunks.length;
-    i++
-  ) {
-
-    const summary =
-      await summarizeChunk(
-        chunks[i],
-        i + 1,
-        chunks.length,
-        options
-      );
-
-    chunkSummaries.push(
-      summary
-    );
+    // ------------------------------------------------------
+    // youtube.com/watch?v=VIDEO_ID
+    // ------------------------------------------------------
 
     if (
-      i <
-      chunks.length - 1
+      hostname === "youtube.com" ||
+      hostname === "www.youtube.com" ||
+      hostname === "m.youtube.com"
     ) {
 
-      await sleep(
-        REQUEST_DELAY
-      );
-    }
-  }
+      const watchId =
+        url.searchParams.get("v");
 
-  console.log(
-    "All chunks summarized."
-  );
-
-  // --------------------------------------------------------
-  // HIERARCHICAL COMBINATION
-  // --------------------------------------------------------
-
-  let current =
-    chunkSummaries;
-
-  while (
-    current.length > 1
-  ) {
-
-    const next = [];
-
-    for (
-      let i = 0;
-      i < current.length;
-      i += SUMMARY_GROUP_SIZE
-    ) {
-
-      const group =
-        current.slice(
-          i,
-          i + SUMMARY_GROUP_SIZE
-        );
-
-      const combined =
-        await combineSummaries(
-          group,
-          options
-        );
-
-      next.push(
-        combined
-      );
-
-      if (
-        i + SUMMARY_GROUP_SIZE <
-        current.length
-      ) {
-
-        await sleep(
-          REQUEST_DELAY
-        );
+      if (watchId) {
+        return watchId;
       }
     }
 
-    current =
-      next;
-  }
+    // ------------------------------------------------------
+    // youtu.be/VIDEO_ID
+    // ------------------------------------------------------
 
-  return current[0];
+    if (
+      hostname === "youtu.be"
+    ) {
+
+      const id =
+        url.pathname
+          .split("/")
+          .filter(Boolean)[0];
+
+      if (id) {
+        return id;
+      }
+    }
+
+    // ------------------------------------------------------
+    // youtube.com/shorts/VIDEO_ID
+    // ------------------------------------------------------
+
+    if (
+      url.pathname.startsWith(
+        "/shorts/"
+      )
+    ) {
+
+      const id =
+        url.pathname
+          .split("/shorts/")[1]
+          ?.split("/")[0];
+
+      if (id) {
+        return id;
+      }
+    }
+
+    // ------------------------------------------------------
+    // youtube.com/embed/VIDEO_ID
+    // ------------------------------------------------------
+
+    if (
+      url.pathname.startsWith(
+        "/embed/"
+      )
+    ) {
+
+      const id =
+        url.pathname
+          .split("/embed/")[1]
+          ?.split("/")[0];
+
+      if (id) {
+        return id;
+      }
+    }
+
+    return null;
+
+  } catch {
+
+    return null;
+  }
 }
 
 // ==========================================================
-// HOME / TEST API
+// TRANSCRIPT TIME HELPERS
+// ==========================================================
+
+function timeToSeconds(
+  time
+) {
+
+  if (
+    time === null ||
+    time === undefined
+  ) {
+    return 0;
+  }
+
+  const value =
+    String(time).trim();
+
+  if (!value) {
+    return 0;
+  }
+
+  // Plain number = seconds
+
+  if (
+    /^\d+(?:\.\d+)?$/.test(
+      value
+    )
+  ) {
+
+    return Number(value);
+  }
+
+  const parts =
+    value
+      .split(":")
+      .map(Number);
+
+  if (
+    parts.some(
+      (part) =>
+        !Number.isFinite(part)
+    )
+  ) {
+
+    return NaN;
+  }
+
+  // HH:MM:SS
+
+  if (
+    parts.length === 3
+  ) {
+
+    return (
+      parts[0] * 3600 +
+      parts[1] * 60 +
+      parts[2]
+    );
+  }
+
+  // MM:SS
+
+  if (
+    parts.length === 2
+  ) {
+
+    return (
+      parts[0] * 60 +
+      parts[1]
+    );
+  }
+
+  return NaN;
+}
+
+// ==========================================================
+// GET SEGMENT START TIME
+// ==========================================================
+
+function getSegmentStartSeconds(
+  segment
+) {
+
+  const raw =
+    Number(
+      segment?.offset ??
+      segment?.start ??
+      0
+    );
+
+  if (
+    !Number.isFinite(raw)
+  ) {
+    return 0;
+  }
+
+  /*
+    youtube-transcript returns
+    offset in milliseconds.
+  */
+
+  return raw / 1000;
+}
+
+// ==========================================================
+// GET SEGMENT DURATION
+// ==========================================================
+
+function getSegmentDurationSeconds(
+  segment
+) {
+
+  const raw =
+    Number(
+      segment?.duration ??
+      0
+    );
+
+  if (
+    !Number.isFinite(raw)
+  ) {
+    return 0;
+  }
+
+  /*
+    youtube-transcript returns
+    duration in milliseconds.
+  */
+
+  return raw / 1000;
+}
+
+// ==========================================================
+// GET FULL TRANSCRIPT DURATION
+// ==========================================================
+
+function getTranscriptDurationSeconds(
+  segments
+) {
+
+  if (
+    !Array.isArray(
+      segments
+    ) ||
+    segments.length === 0
+  ) {
+
+    return 0;
+  }
+
+  let maxEnd = 0;
+
+  for (
+    const segment of segments
+  ) {
+
+    const start =
+      getSegmentStartSeconds(
+        segment
+      );
+
+    const duration =
+      getSegmentDurationSeconds(
+        segment
+      );
+
+    const end =
+      start + duration;
+
+    if (
+      Number.isFinite(end)
+    ) {
+
+      maxEnd =
+        Math.max(
+          maxEnd,
+          end
+        );
+    }
+  }
+
+  return maxEnd;
+}
+
+// ==========================================================
+// FORMAT SECONDS AS VIDEO DURATION
+// ==========================================================
+
+function formatSecondsAsDuration(
+  seconds
+) {
+
+  if (
+    !Number.isFinite(seconds) ||
+    seconds < 0
+  ) {
+
+    return "";
+  }
+
+  const totalSeconds =
+    Math.round(seconds);
+
+  const hours =
+    Math.floor(
+      totalSeconds / 3600
+    );
+
+  const minutes =
+    Math.floor(
+      (totalSeconds % 3600) / 60
+    );
+
+  const remainingSeconds =
+    totalSeconds % 60;
+
+  if (
+    hours > 0
+  ) {
+
+    return [
+
+      String(hours)
+        .padStart(2, "0"),
+
+      String(minutes)
+        .padStart(2, "0"),
+
+      String(
+        remainingSeconds
+      ).padStart(2, "0"),
+
+    ].join(":");
+  }
+
+  return [
+
+    String(minutes)
+      .padStart(2, "0"),
+
+    String(
+      remainingSeconds
+    ).padStart(2, "0"),
+
+  ].join(":");
+}
+
+// ==========================================================
+// APPLY TRANSCRIPT TIME FILTER
+// ==========================================================
+
+function applyTranscriptTimeFilter(
+  transcriptData,
+  transcriptMode,
+  startTime,
+  endTime,
+  durationLimit,
+  durationUnit
+) {
+
+  if (
+    !Array.isArray(
+      transcriptData
+    ) ||
+    transcriptData.length === 0
+  ) {
+
+    return (
+      transcriptData || []
+    );
+  }
+
+  // --------------------------------------------------------
+  // FULL VIDEO
+  // --------------------------------------------------------
+
+  if (
+    !transcriptMode ||
+    transcriptMode === "full"
+  ) {
+
+    return transcriptData;
+  }
+
+  // --------------------------------------------------------
+  // CUSTOM RANGE
+  // --------------------------------------------------------
+
+  if (
+    transcriptMode === "custom"
+  ) {
+
+    const startSeconds =
+      timeToSeconds(
+        startTime
+      );
+
+    const endSeconds =
+      timeToSeconds(
+        endTime
+      );
+
+    if (
+      !Number.isFinite(
+        startSeconds
+      ) ||
+      !Number.isFinite(
+        endSeconds
+      )
+    ) {
+
+      throw new Error(
+        "Please enter valid start and end times in HH:MM:SS or MM:SS format."
+      );
+    }
+
+    if (
+      startSeconds < 0 ||
+      endSeconds <= startSeconds
+    ) {
+
+      throw new Error(
+        "End time must be greater than start time."
+      );
+    }
+
+    const fullDuration =
+      getTranscriptDurationSeconds(
+        transcriptData
+      );
+
+    if (
+      startSeconds >=
+      fullDuration
+    ) {
+
+      throw new Error(
+        "The selected start time is beyond the available transcript duration."
+      );
+    }
+
+    const safeEndSeconds =
+      Math.min(
+        endSeconds,
+        fullDuration
+      );
+
+    return transcriptData.filter(
+      (segment) => {
+
+        const segmentStart =
+          getSegmentStartSeconds(
+            segment
+          );
+
+        const segmentEnd =
+          segmentStart +
+          getSegmentDurationSeconds(
+            segment
+          );
+
+        /*
+          Include captions that
+          overlap the selected range.
+        */
+
+        return (
+          segmentEnd >
+            startSeconds &&
+          segmentStart <
+            safeEndSeconds
+        );
+      }
+    );
+  }
+
+  // --------------------------------------------------------
+  // DURATION LIMIT
+  // --------------------------------------------------------
+
+  if (
+    transcriptMode === "duration"
+  ) {
+
+    const numericLimit =
+      Number(
+        durationLimit
+      );
+
+    if (
+      !Number.isFinite(
+        numericLimit
+      ) ||
+      numericLimit <= 0
+    ) {
+
+      throw new Error(
+        "Duration limit must be greater than 0."
+      );
+    }
+
+    const normalizedUnit =
+      String(
+        durationUnit
+      ).toLowerCase();
+
+    const limitSeconds =
+      normalizedUnit ===
+      "seconds"
+
+        ? numericLimit
+
+        : numericLimit * 60;
+
+    return transcriptData.filter(
+      (segment) => {
+
+        const segmentStart =
+          getSegmentStartSeconds(
+            segment
+          );
+
+        return (
+          segmentStart <
+          limitSeconds
+        );
+      }
+    );
+  }
+
+  return transcriptData;
+}
+
+// ==========================================================
+// SUMMARY OUTPUT CLEANER
+// ==========================================================
+
+function cleanSummaryOutput(
+  text,
+  summaryType = "detailed"
+) {
+
+  if (!text) {
+    return "";
+  }
+
+  let cleaned =
+    String(text);
+
+  // --------------------------------------------------------
+  // REMOVE CODE FENCES
+  // --------------------------------------------------------
+
+  cleaned =
+    cleaned.replace(
+      /```(?:markdown|md|text)?/gi,
+      ""
+    );
+
+  cleaned =
+    cleaned.replace(
+      /```/g,
+      ""
+    );
+
+  // --------------------------------------------------------
+  // REMOVE HORIZONTAL MARKDOWN RULES
+  // --------------------------------------------------------
+
+  cleaned =
+    cleaned.replace(
+      /^\s*([-*_]){3,}\s*$/gm,
+      ""
+    );
+
+  // --------------------------------------------------------
+  // REMOVE MARKDOWN HEADINGS
+  // --------------------------------------------------------
+
+  cleaned =
+    cleaned.replace(
+      /^\s*#{1,6}\s+/gm,
+      ""
+    );
+
+  // --------------------------------------------------------
+  // REMOVE BOLD MARKERS
+  // --------------------------------------------------------
+
+  cleaned =
+    cleaned.replace(
+      /\*\*(.*?)\*\*/g,
+      "$1"
+    );
+
+  cleaned =
+    cleaned.replace(
+      /__(.*?)__/g,
+      "$1"
+    );
+
+  // --------------------------------------------------------
+  // REMOVE ITALIC MARKERS
+  // --------------------------------------------------------
+
+  cleaned =
+    cleaned.replace(
+      /(^|[^\w])\*([^\n*]+)\*(?=\s|$)/g,
+      "$1$2"
+    );
+
+  cleaned =
+    cleaned.replace(
+      /(^|[^\w])_([^\n_]+)_(?=\s|$)/g,
+      "$1$2"
+    );
+
+  // --------------------------------------------------------
+  // CONVERT MARKDOWN BULLETS
+  // --------------------------------------------------------
+
+  cleaned =
+    cleaned.replace(
+      /^\s*[-*+]\s+/gm,
+      "• "
+    );
+
+  // --------------------------------------------------------
+  // KEEP NUMBERED LISTS CLEAN
+  // --------------------------------------------------------
+
+  cleaned =
+    cleaned.replace(
+      /^\s{0,3}\d+\.\s+/gm,
+      (match) => {
+
+        const number =
+          match.match(
+            /\d+/
+          )?.[0] || "";
+
+        return `${number}. `;
+      }
+    );
+
+  // --------------------------------------------------------
+  // REMOVE BLOCKQUOTE MARKERS
+  // --------------------------------------------------------
+
+  cleaned =
+    cleaned.replace(
+      /^\s*>\s?/gm,
+      ""
+    );
+
+  // --------------------------------------------------------
+  // REMOVE EXTRA SEPARATORS
+  // --------------------------------------------------------
+
+  cleaned =
+    cleaned.replace(
+      /^\s*[-_=]{3,}\s*$/gm,
+      ""
+    );
+
+  // --------------------------------------------------------
+  // REMOVE EXCESSIVE BLANK LINES
+  // --------------------------------------------------------
+
+  cleaned =
+    cleaned.replace(
+      /\n{3,}/g,
+      "\n\n"
+    );
+
+  // --------------------------------------------------------
+  // REMOVE SPACES BEFORE PUNCTUATION
+  // --------------------------------------------------------
+
+  cleaned =
+    cleaned.replace(
+      /\s+([,.!?;:])/g,
+      "$1"
+    );
+
+  // --------------------------------------------------------
+  // REMOVE UNNECESSARY SPACES
+  // --------------------------------------------------------
+
+  cleaned =
+    cleaned.replace(
+      /[ \t]{2,}/g,
+      " "
+    );
+
+  // --------------------------------------------------------
+  // FIX BULLET SPACING
+  // --------------------------------------------------------
+
+  cleaned =
+    cleaned.replace(
+      /•\s+/g,
+      "• "
+    );
+
+  // --------------------------------------------------------
+  // REMOVE EMPTY BULLETS
+  // --------------------------------------------------------
+
+  cleaned =
+    cleaned.replace(
+      /^\s*•\s*$/gm,
+      ""
+    );
+
+  // --------------------------------------------------------
+  // TRIM EACH LINE
+  // --------------------------------------------------------
+
+  cleaned =
+    cleaned
+      .split("\n")
+      .map(
+        (line) =>
+          line.trim()
+      )
+      .join("\n");
+
+  // --------------------------------------------------------
+  // FINAL BLANK-LINE CLEANUP
+  // --------------------------------------------------------
+
+  cleaned =
+    cleaned.replace(
+      /\n{3,}/g,
+      "\n\n"
+    );
+
+  return cleaned.trim();
+}
+
+// ==========================================================
+// BASIC API
 // ==========================================================
 
 app.get(
@@ -1045,8 +1143,10 @@ app.get(
       success: true,
 
       message:
-        "SmartDoc AI server is running.",
+        "SmartDoc AI backend is running.",
+
     });
+
   }
 );
 
@@ -1063,85 +1163,1207 @@ app.get(
       success: true,
 
       service:
-        "SmartDoc AI API",
+        "SmartDoc AI",
 
       status:
         "online",
 
-      endpoints: {
+      aiProviders: [
 
-        summary:
-          "/api/summarize",
+        PROVIDERS.GEMINI,
 
-        ask:
-          "/api/ask",
-      },
+        PROVIDERS.CEREBRAS,
+
+        PROVIDERS.GROQ,
+
+      ],
+
     });
+
   }
 );
 
 // ==========================================================
-// MALAYALAM SUMMARY API
+// TEST AI ENDPOINT
 // ==========================================================
 
 app.post(
-  "/api/summarize",
-
+  "/api/test-ai",
   async (req, res) => {
 
     try {
 
-      const documentText =
-        validateDocument(
-          req.body?.documentText
-        );
+      const message =
+        String(
+          req.body?.message ||
+            ""
+        ).trim();
 
-      const stats =
-        getDocumentStats(
-          documentText
-        );
+      if (!message) {
 
-      console.log(
-        "================================"
-      );
+        return res.status(400).json({
 
-      console.log(
-        "New summary request"
-      );
+          success: false,
 
-      console.log(
-        "Characters:",
-        stats.characters
-      );
+          error:
+            "Message is required.",
 
-      console.log(
-        "Estimated pages:",
-        stats.estimatedPages
-      );
+        });
 
-      console.log(
-        "================================"
-      );
+      }
 
       const providerTracker =
         [];
 
-      const summary =
-        await createLargeDocumentSummary(
-          documentText,
+      const response =
+        await askAI(
+
+          [
+
+            {
+              role: "system",
+
+              content:
+                "You are SmartDoc AI. Give a short, accurate response.",
+            },
+
+            {
+              role: "user",
+
+              content:
+                message,
+            },
+
+          ],
+
           {
+
+            maxCompletionTokens:
+              1024,
+
             providerTracker,
+
           }
+
         );
 
-      if (!summary) {
+      return res.json({
 
-        return sendError(
-          res,
-          500,
-          "No summary was generated."
+        success: true,
+
+        response,
+
+        generatedBy:
+          providerTracker[
+            providerTracker.length - 1
+          ] ||
+          "SmartDoc AI",
+
+        providersUsed: [
+
+          ...new Set(
+            providerTracker
+          ),
+
+        ],
+
+      });
+
+    } catch (error) {
+
+      console.error(
+        "AI Test Error:",
+        error?.message ||
+          error
+      );
+
+      return res.status(500).json({
+
+        success: false,
+
+        error:
+          "AI request failed.",
+
+        details:
+          error?.message ||
+          "Unknown error.",
+
+      });
+
+    }
+
+  }
+);
+
+// ==========================================================
+// REAL YOUTUBE TRANSCRIPT ENDPOINT
+// ==========================================================
+
+app.post(
+  "/api/transcript",
+  async (req, res) => {
+
+    try {
+
+      const {
+
+        videoUrl,
+
+        // Backward compatibility.
+        language =
+          "English",
+
+        // Transcript settings.
+        transcriptMode =
+          "full",
+
+        startTime =
+          "00:00:00",
+
+        endTime =
+          "00:15:00",
+
+        durationLimit =
+          15,
+
+        durationUnit =
+          "minutes",
+
+        additionalOptions = {},
+
+      } = req.body;
+
+      // ------------------------------------------------------
+      // CHECK URL
+      // ------------------------------------------------------
+
+      if (!videoUrl) {
+
+        return res.status(400).json({
+
+          success: false,
+
+          error:
+            "YouTube video URL is required.",
+
+        });
+
+      }
+
+      // ------------------------------------------------------
+      // GET VIDEO ID
+      // ------------------------------------------------------
+
+      const videoId =
+        getYouTubeVideoId(
+          videoUrl
+        );
+
+      if (!videoId) {
+
+        return res.status(400).json({
+
+          success: false,
+
+          error:
+            "Invalid YouTube video URL.",
+
+        });
+
+      }
+
+      console.log(
+        "========================================"
+      );
+
+      console.log(
+        "Transcript request received"
+      );
+
+      console.log(
+        "Video URL:",
+        videoUrl
+      );
+
+      console.log(
+        "Video ID:",
+        videoId
+      );
+
+      console.log(
+        "Transcript mode:",
+        transcriptMode
+      );
+
+      console.log(
+        "Start time:",
+        startTime
+      );
+
+      console.log(
+        "End time:",
+        endTime
+      );
+
+      console.log(
+        "Duration limit:",
+        durationLimit,
+        durationUnit
+      );
+
+      console.log(
+        "Additional options:",
+        additionalOptions
+      );
+
+      // ------------------------------------------------------
+      // FETCH FULL TRANSCRIPT
+      // ------------------------------------------------------
+
+      let transcriptData;
+
+      try {
+
+        transcriptData =
+          await YoutubeTranscript.fetchTranscript(
+            videoId
+          );
+
+      } catch (
+        transcriptError
+      ) {
+
+        console.error(
+          "Transcript retrieval failed:",
+          transcriptError?.message ||
+            transcriptError
+        );
+
+        throw new Error(
+          "Unable to retrieve the YouTube transcript."
         );
       }
+
+      // ------------------------------------------------------
+      // CHECK RESULT
+      // ------------------------------------------------------
+
+      if (
+        !transcriptData ||
+        !Array.isArray(
+          transcriptData
+        ) ||
+        transcriptData.length === 0
+      ) {
+
+        throw new Error(
+          "No transcript was found for this video."
+        );
+
+      }
+
+      // ------------------------------------------------------
+      // FULL VIDEO DURATION
+      // ------------------------------------------------------
+
+      const fullVideoDurationSeconds =
+        getTranscriptDurationSeconds(
+          transcriptData
+        );
+
+      const fullVideoDuration =
+        formatSecondsAsDuration(
+          fullVideoDurationSeconds
+        );
+
+      // ------------------------------------------------------
+      // APPLY USER TRANSCRIPT SETTINGS
+      // ------------------------------------------------------
+
+      const filteredTranscriptData =
+        applyTranscriptTimeFilter(
+
+          transcriptData,
+
+          transcriptMode,
+
+          startTime,
+
+          endTime,
+
+          durationLimit,
+
+          durationUnit
+
+        );
+
+      // ------------------------------------------------------
+      // CHECK FILTERED RESULT
+      // ------------------------------------------------------
+
+      if (
+        !filteredTranscriptData ||
+        filteredTranscriptData.length === 0
+      ) {
+
+        throw new Error(
+          "No transcript content was found in the selected time range."
+        );
+
+      }
+
+      // ------------------------------------------------------
+      // FORMAT SELECTED TRANSCRIPT
+      // ------------------------------------------------------
+
+      const transcript =
+        filteredTranscriptData
+
+          .map(
+            (item) =>
+              String(
+                item?.text ||
+                  ""
+              )
+          )
+
+          .join(" ")
+
+          .replace(
+            /\s+/g,
+            " "
+          )
+
+          .trim();
+
+      // ------------------------------------------------------
+      // CHECK READABLE TRANSCRIPT
+      // ------------------------------------------------------
+
+      if (!transcript) {
+
+        throw new Error(
+          "The selected time range contains no readable transcript."
+        );
+
+      }
+
+      // ------------------------------------------------------
+      // SELECTED DURATION
+      // ------------------------------------------------------
+
+      const selectedDurationSeconds =
+        getTranscriptDurationSeconds(
+          filteredTranscriptData
+        );
+
+      const selectedDuration =
+        formatSecondsAsDuration(
+          selectedDurationSeconds
+        );
+
+      // ------------------------------------------------------
+      // SUCCESS LOG
+      // ------------------------------------------------------
+
+      console.log(
+        "Transcript successfully retrieved."
+      );
+
+      console.log(
+        "Full transcript segments:",
+        transcriptData.length
+      );
+
+      console.log(
+        "Selected transcript segments:",
+        filteredTranscriptData.length
+      );
+
+      console.log(
+        "Transcript characters:",
+        transcript.length
+      );
+
+      console.log(
+        "Full video duration:",
+        fullVideoDuration ||
+          "Not available"
+      );
+
+      console.log(
+        "Selected transcript duration:",
+        selectedDuration ||
+          "Not available"
+      );
+
+      console.log(
+        "========================================"
+      );
+
+      // ------------------------------------------------------
+      // RETURN RESULT
+      // ------------------------------------------------------
+
+      return res.json({
+
+        success: true,
+
+        videoUrl,
+
+        videoId,
+
+        sourceLanguage:
+          transcriptData?.[0]?.lang ||
+          null,
+
+        requestedOutputLanguage:
+          language,
+
+        transcript,
+
+        segments:
+          filteredTranscriptData,
+
+        fullSegments:
+          transcriptData,
+
+        segmentCount:
+          filteredTranscriptData.length,
+
+        totalSegmentCount:
+          transcriptData.length,
+
+        characterCount:
+          transcript.length,
+
+        transcriptMode,
+
+        selectedStartTime:
+          transcriptMode ===
+          "custom"
+            ? startTime
+            : "00:00:00",
+
+        selectedEndTime:
+          transcriptMode ===
+          "custom"
+            ? endTime
+            : null,
+
+        durationLimit:
+          transcriptMode ===
+          "duration"
+            ? Number(
+                durationLimit
+              )
+            : null,
+
+        durationUnit:
+          transcriptMode ===
+          "duration"
+            ? durationUnit
+            : null,
+
+        fullVideoDurationSeconds,
+
+        videoDuration:
+          fullVideoDuration ||
+          null,
+
+        selectedDurationSeconds,
+
+        selectedDuration:
+          selectedDuration ||
+          null,
+
+        status:
+          "completed",
+
+      });
+
+    } catch (error) {
+
+      console.error(
+        "Transcript Error:",
+        error?.message ||
+          error
+      );
+
+      return res.status(500).json({
+
+        success: false,
+
+        error:
+          "Unable to retrieve the YouTube transcript.",
+
+        details:
+          error?.message ||
+          "Unknown transcript error.",
+
+      });
+
+    }
+
+  }
+);
+
+// ==========================================================
+// TRANSCRIPT TEST ENDPOINT
+// ==========================================================
+
+app.post(
+  "/api/transcript-test",
+  async (req, res) => {
+
+    try {
+
+      const {
+
+        videoUrl,
+
+        language =
+          "English",
+
+      } = req.body;
+
+      if (!videoUrl) {
+
+        return res.status(400).json({
+
+          success: false,
+
+          error:
+            "YouTube video URL is required.",
+
+        });
+
+      }
+
+      const videoId =
+        getYouTubeVideoId(
+          videoUrl
+        );
+
+      if (!videoId) {
+
+        return res.status(400).json({
+
+          success: false,
+
+          error:
+            "Invalid YouTube video URL.",
+
+        });
+
+      }
+
+      console.log(
+        "Transcript test request:"
+      );
+
+      console.log(
+        "Video:",
+        videoUrl
+      );
+
+      console.log(
+        "Video ID:",
+        videoId
+      );
+
+      console.log(
+        "Language:",
+        language
+      );
+
+      return res.json({
+
+        success: true,
+
+        message:
+          "Transcript backend connection is working.",
+
+        videoUrl,
+
+        videoId,
+
+        language,
+
+        status:
+          "ready",
+
+      });
+
+    } catch (error) {
+
+      console.error(
+        "Transcript Test Error:",
+        error?.message ||
+          error
+      );
+
+      return res.status(500).json({
+
+        success: false,
+
+        error:
+          "Transcript test failed.",
+
+        details:
+          error?.message ||
+          "Unknown error.",
+
+      });
+
+    }
+
+  }
+);
+
+// ==========================================================
+// AI TRANSCRIPT SUMMARY
+// ==========================================================
+
+app.post(
+  "/api/summarize-transcript",
+  async (req, res) => {
+
+    try {
+
+      const {
+
+        transcript,
+
+        outputLanguage,
+
+        language =
+          "English",
+
+        summaryType =
+          "detailed",
+
+        aiPrompt =
+          "",
+
+      } = req.body;
+
+      // ------------------------------------------------------
+      // FINAL OUTPUT LANGUAGE
+      // ------------------------------------------------------
+
+      const finalLanguage =
+        outputLanguage ||
+        language ||
+        "English";
+
+      // ------------------------------------------------------
+      // SUMMARY TYPE
+      // ------------------------------------------------------
+
+      const normalizedSummaryType =
+        String(
+          summaryType
+        ).toLowerCase();
+
+      const allowedSummaryTypes = [
+
+        "detailed",
+
+        "bullet",
+
+        "abstract",
+
+      ];
+
+      const selectedSummaryType =
+        allowedSummaryTypes.includes(
+          normalizedSummaryType
+        )
+          ? normalizedSummaryType
+          : "detailed";
+
+      // ------------------------------------------------------
+      // CHECK TRANSCRIPT
+      // ------------------------------------------------------
+
+      if (
+        !transcript ||
+        !String(
+          transcript
+        ).trim()
+      ) {
+
+        return res.status(400).json({
+
+          success: false,
+
+          error:
+            "Transcript is required.",
+
+        });
+
+      }
+
+      console.log(
+        "========================================"
+      );
+
+      console.log(
+        "Transcript summary request received"
+      );
+
+      console.log(
+        "Output language:",
+        finalLanguage
+      );
+
+      console.log(
+        "Summary type:",
+        selectedSummaryType
+      );
+
+      console.log(
+        "Custom AI prompt:",
+        aiPrompt
+          ? "Provided"
+          : "Not provided"
+      );
+
+      console.log(
+        "Transcript length:",
+        transcript.length
+      );
+
+      // ------------------------------------------------------
+      // PROVIDER TRACKER
+      // ------------------------------------------------------
+
+      const providerTracker =
+        [];
+
+      // ------------------------------------------------------
+      // SUMMARY TYPE INSTRUCTIONS
+      // ------------------------------------------------------
+
+      const summaryTypeInstructions = {
+
+        detailed: `
+
+Create a DETAILED STUDY SUMMARY.
+
+Requirements:
+
+- Explain the main concepts clearly and sufficiently.
+- Organize the summary using meaningful plain-text headings.
+- Include important definitions.
+- Include important facts.
+- Include formulas when present.
+- Include processes and steps when present.
+- Include technically important examples when present.
+- Explain relationships between important concepts.
+- Remove repetition.
+- Keep the content useful for serious exam preparation.
+- Do not make the summary unnecessarily long.
+- Focus on educational, technical, factual and study-relevant information.
+
+The final result must look like a professional study note.
+
+`,
+
+        bullet: `
+
+Create a BULLET STUDY SUMMARY.
+
+Requirements:
+
+- Organize the information under meaningful plain-text headings.
+- Use concise bullet points.
+- Use sub-bullets when necessary.
+- Include important definitions.
+- Include important facts.
+- Include formulas when present.
+- Include important examples when present.
+- Include processes and steps when present.
+- Avoid unnecessary long paragraphs.
+- Remove repetition.
+- Make the result suitable for quick revision and exam preparation.
+
+The final result must look like a professional revision note.
+
+`,
+
+        abstract: `
+
+Create an ABSTRACT SUMMARY.
+
+Requirements:
+
+- Write a concise professional overview.
+- Explain the main topic.
+- Explain the purpose or central idea.
+- Include the most important concepts.
+- Preserve the essential meaning of the source.
+- Do not include unnecessary examples.
+- Do not include repetition.
+- Normally use well-structured paragraphs.
+- Keep the result concise and academic.
+
+The final result must look like a professional academic abstract.
+
+`,
+
+      };
+
+      // ------------------------------------------------------
+      // SYSTEM PROMPT
+      // ------------------------------------------------------
+
+      const systemPrompt = `
+
+You are SmartDoc AI,
+an AI learning and study assistant.
+
+Your task is to convert a YouTube video transcript
+into a professional, study-oriented summary.
+
+==========================================================
+LANGUAGE REQUIREMENT
+==========================================================
+
+The transcript may be written in ANY language.
+
+The user's selected FINAL OUTPUT LANGUAGE is:
+
+${finalLanguage}
+
+You MUST write the FINAL SUMMARY entirely in
+${finalLanguage}.
+
+If the transcript is written in a different language,
+understand the source meaning first and then produce
+the summary in ${finalLanguage}.
+
+Do NOT assume that the transcript language and output
+language are the same.
+
+For example:
+
+Hindi transcript + English selected
+= English summary.
+
+Hindi transcript + Malayalam selected
+= Malayalam summary.
+
+Malayalam transcript + English selected
+= English summary.
+
+Malayalam transcript + Malayalam selected
+= Malayalam summary.
+
+==========================================================
+CONTENT FILTERING
+==========================================================
+
+This is extremely important.
+
+The transcript may contain conversational and
+non-educational material.
+
+You MUST separate useful study content from filler.
+
+INCLUDE:
+
+- Important educational information
+- Technical concepts
+- Definitions
+- Explanations
+- Important facts
+- Formulas
+- Rules
+- Processes
+- Steps
+- Examples that explain the subject
+- Important comparisons
+- Important conclusions
+- Exam-relevant information
+- Subject-specific terminology
+
+EXCLUDE:
+
+- Greetings
+- Good morning / good afternoon / good evening
+- "How are you?"
+- "Can everyone hear me?"
+- "Are you ready?"
+- Classroom management
+- Personal conversations
+- Casual conversations
+- Unrelated stories
+- Repeated statements
+- Repeated explanations
+- Unnecessary introductions
+- Unnecessary conclusions
+- "Let's begin"
+- "Today we are going to..."
+  when it does not contain useful subject information
+- "Please listen"
+- "Please subscribe"
+- "Like and share"
+- "Subscribe to my channel"
+- YouTube promotional content
+- Requests to comment
+- Requests to follow social media
+- Sponsor advertisements
+- Unrelated personal opinions
+- Filler words and conversational phrases
+- Any content that does not contribute to understanding
+  the subject
+
+If a sentence contains both useful information and
+filler, keep only the useful information.
+
+DO NOT mention that you removed filler.
+
+Do not write statements such as:
+"Greetings were removed."
+
+Simply provide the useful study content.
+
+==========================================================
+ACCURACY
+==========================================================
+
+1. Do not invent facts.
+
+2. Do not add information that is not supported
+   by the transcript.
+
+3. Preserve the meaning of the source.
+
+4. Preserve important technical terms.
+
+5. Do not change formulas or numerical values.
+
+6. Do not create false examples.
+
+7. If the transcript contains an unclear statement,
+   do not invent a replacement.
+
+8. Remove repetition without removing important meaning.
+
+9. Prefer clear academic language.
+
+10. Make the summary useful for students.
+
+==========================================================
+PROFESSIONAL FORMATTING
+==========================================================
+
+IMPORTANT:
+
+The frontend displays the returned text directly.
+
+Therefore DO NOT use Markdown formatting.
+
+DO NOT use:
+
+#
+##
+###
+****
+**
+*
+---
+___
+backticks
+Markdown tables
+
+DO NOT put Markdown syntax in the answer.
+
+For headings, simply write the heading as normal text.
+
+Example:
+
+Artificial Intelligence
+
+Definition:
+Artificial Intelligence is...
+
+NOT:
+
+# Artificial Intelligence
+
+NOT:
+
+### Artificial Intelligence
+
+For bullet summaries, use the Unicode bullet character:
+
+•
+
+Example:
+
+• Artificial Intelligence is a broad field.
+• Machine Learning is a subset of AI.
+• Deep Learning uses neural networks.
+
+Do NOT use:
+
+* Artificial Intelligence
+- Machine Learning
++ Deep Learning
+
+For important terms, simply write:
+
+Definition:
+Machine Learning is...
+
+instead of Markdown bold formatting.
+
+==========================================================
+SUMMARY TYPE
+==========================================================
+
+Requested summary type:
+
+${selectedSummaryType}
+
+${summaryTypeInstructions[selectedSummaryType]}
+
+==========================================================
+OPTIONAL USER INSTRUCTIONS
+==========================================================
+
+${
+  aiPrompt
+    ? aiPrompt
+    : "No additional instructions were provided."
+}
+
+==========================================================
+FINAL QUALITY CHECK
+==========================================================
+
+Before returning the final summary, silently check:
+
+1. Is the output entirely in ${finalLanguage}?
+
+2. Did I remove greetings and casual conversation?
+
+3. Did I remove YouTube promotional content?
+
+4. Did I remove repeated information?
+
+5. Did I preserve important educational content?
+
+6. Did I follow the requested summary type?
+
+7. Did I avoid Markdown symbols?
+
+8. Does the result look like a professional study note?
+
+Return ONLY the final summary.
+
+`;
+
+      // ------------------------------------------------------
+      // USER PROMPT
+      // ------------------------------------------------------
+
+      const userPrompt = `
+
+Process the following YouTube transcript.
+
+Create a ${selectedSummaryType} study summary.
+
+Final output language:
+${finalLanguage}
+
+Remember:
+
+- The transcript may be in any language.
+- Translate the meaning when necessary.
+- Keep only useful study content.
+- Remove greetings, casual conversation,
+  promotional content and filler.
+- Do not invent information.
+- Do not use Markdown symbols.
+- Follow the requested summary type.
+
+TRANSCRIPT:
+
+${transcript}
+
+`;
+
+      // ------------------------------------------------------
+      // AI GENERATION
+      // ------------------------------------------------------
+
+      const rawSummary =
+        await askAI(
+
+          [
+
+            {
+              role: "system",
+
+              content:
+                systemPrompt,
+
+            },
+
+            {
+              role: "user",
+
+              content:
+                userPrompt,
+
+            },
+
+          ],
+
+          {
+
+            maxCompletionTokens:
+              8192,
+
+            providerTracker,
+
+          }
+
+        );
+
+      // ------------------------------------------------------
+      // CLEAN AI OUTPUT
+      // ------------------------------------------------------
+
+      const summary =
+        cleanSummaryOutput(
+          rawSummary,
+          selectedSummaryType
+        );
+
+      // ------------------------------------------------------
+      // FINAL LOG
+      // ------------------------------------------------------
+
+      console.log(
+        "Transcript summary generated."
+      );
+
+      console.log(
+        "Summary cleaned successfully."
+      );
+
+      console.log(
+        "========================================"
+      );
+
+      // ------------------------------------------------------
+      // RETURN RESULT
+      // ------------------------------------------------------
 
       return res.json({
 
@@ -1149,532 +2371,83 @@ app.post(
 
         summary,
 
-        document:
-          stats,
+        language:
+          finalLanguage,
+
+        outputLanguage:
+          finalLanguage,
+
+        summaryType:
+          selectedSummaryType,
 
         generatedBy:
-          getGeneratedBy(
-            providerTracker
-          ),
+          providerTracker[
+            providerTracker.length - 1
+          ] ||
+          "SmartDoc AI",
 
-        providersUsed:
-          getProvidersUsed(
-            providerTracker
-          ),
-      });
+        providersUsed: [
 
-    } catch (error) {
-
-      console.error(
-        "Summary Error:",
-        error
-      );
-
-      return sendError(
-
-        res,
-
-        error?.status || 500,
-
-        error?.status === 413
-          ? error.message
-          : "AI failed to generate the summary.",
-
-        error?.message ||
-          "Unknown error."
-      );
-    }
-  }
-);
-
-// ==========================================================
-// ASK QUESTION ABOUT DOCUMENT
-// ==========================================================
-
-app.post(
-  "/api/ask",
-
-  async (req, res) => {
-
-    try {
-
-      const question =
-        normalizeQuestion(
-          req.body?.question
-        );
-
-      const documentText =
-        validateDocument(
-          req.body?.documentText
-        );
-
-      if (!question) {
-
-        return sendError(
-          res,
-          400,
-          "Question is required."
-        );
-      }
-
-      const providerTracker =
-        [];
-
-      const chunks =
-        splitDocument(
-          documentText
-        );
-
-      // ------------------------------------------------------
-      // SMALL DOCUMENT
-      // ------------------------------------------------------
-
-      if (chunks.length === 1) {
-
-        const prompt = `
-
-You are SmartDoc AI.
-
-Answer the question using ONLY
-information from the document.
-
-RULES:
-
-- Do NOT add outside information.
-- Do NOT invent facts.
-- If the answer is not present,
-  say:
-
-"The answer is not available
-in the provided document."
-
-- If the question is in Malayalam,
-  answer in Malayalam.
-- Keep the answer simple.
-- Preserve important names,
-  dates and numbers.
-- Do not use Markdown symbols.
-
-DOCUMENT:
-
-${documentText}
-
-QUESTION:
-
-${question}
-
-Now answer the question.
-`;
-
-        const answer =
-          await askAI(
-
-            [
-              {
-                role: "system",
-
-                content:
-                  "You are SmartDoc AI, an accurate document question-answering assistant.",
-              },
-
-              {
-                role: "user",
-
-                content:
-                  prompt,
-              },
-            ],
-
-            {
-              maxCompletionTokens:
-                4096,
-
-              providerTracker,
-            }
-          );
-
-        return res.json({
-
-          success: true,
-
-          answer,
-
-          generatedBy:
-            getGeneratedBy(
-              providerTracker
-            ),
-
-          providersUsed:
-            getProvidersUsed(
-              providerTracker
-            ),
-        });
-      }
-
-      // ------------------------------------------------------
-      // LARGE DOCUMENT
-      // ------------------------------------------------------
-
-      // Find chunks that are likely related
-      // to the user's question.
-
-      const terms =
-        [
           ...new Set(
-
-            question
-              .toLowerCase()
-
-              .replace(
-                /[^\p{L}\p{N}\s]/gu,
-                " "
-              )
-
-              .split(/\s+/)
-
-              .filter(
-                (word) =>
-                  word.length >= 3
-              )
-          ),
-        ];
-
-      const scoredChunks =
-        chunks
-          .map(
-            (
-              chunk,
-              index
-            ) => {
-
-              const lower =
-                chunk.toLowerCase();
-
-              let score = 0;
-
-              for (
-                const term
-                of terms
-              ) {
-
-                let position =
-                  lower.indexOf(
-                    term
-                  );
-
-                while (
-                  position !== -1
-                ) {
-
-                  score++;
-
-                  position =
-                    lower.indexOf(
-                      term,
-                      position +
-                        term.length
-                    );
-                }
-              }
-
-              return {
-                chunk,
-                index,
-                score,
-              };
-            }
-          )
-
-          .sort(
-            (a, b) =>
-              b.score - a.score
-          );
-
-      // Maximum 12 relevant sections
-      const selected =
-        scoredChunks
-          .slice(
-            0,
-            Math.min(
-              12,
-              scoredChunks.length
-            )
-          )
-          .filter(
-            (item) =>
-              item.score > 0
-          );
-
-      // If no keyword match,
-      // use first few chunks.
-      const candidates =
-        selected.length > 0
-          ? selected
-          : scoredChunks.slice(
-              0,
-              Math.min(
-                4,
-                scoredChunks.length
-              )
-            );
-
-      console.log(
-        "Total chunks:",
-        chunks.length
-      );
-
-      console.log(
-        "Selected chunks:",
-        candidates.length
-      );
-
-      // ------------------------------------------------------
-      // ASK AI ABOUT RELEVANT CHUNKS
-      // ------------------------------------------------------
-
-      const relevantAnswers =
-        [];
-
-      for (
-        let i = 0;
-        i < candidates.length;
-        i++
-      ) {
-
-        const item =
-          candidates[i];
-
-        const prompt = `
-
-You are SmartDoc AI.
-
-Check whether this document
-section contains information
-that can answer the question.
-
-QUESTION:
-
-${question}
-
-DOCUMENT SECTION:
-
-${item.chunk}
-
-RULES:
-
-- Use ONLY this section.
-- Do NOT use outside knowledge.
-- Do NOT invent facts.
-- If this section is not useful,
-  reply exactly:
-
-NOT_RELEVANT
-
-- If useful, provide the
-  relevant information.
-- If question is in Malayalam,
-  answer in Malayalam.
-- Do not use Markdown symbols.
-`;
-
-        const answer =
-          await askAI(
-
-            [
-              {
-                role: "system",
-
-                content:
-                  "You are SmartDoc AI, an accurate document retrieval assistant.",
-              },
-
-              {
-                role: "user",
-
-                content:
-                  prompt,
-              },
-            ],
-
-            {
-              maxCompletionTokens:
-                2048,
-
-              providerTracker,
-            }
-          );
-
-        if (
-          answer &&
-          answer
-            .trim()
-            .toUpperCase() !==
-            "NOT_RELEVANT"
-        ) {
-
-          relevantAnswers.push(
-
-            `DOCUMENT SECTION ${
-              item.index + 1
-            }:
-
-${answer}`
-          );
-        }
-
-        if (
-          i <
-          candidates.length - 1
-        ) {
-
-          await sleep(
-            REQUEST_DELAY
-          );
-        }
-      }
-
-      // ------------------------------------------------------
-      // NO ANSWER
-      // ------------------------------------------------------
-
-      if (
-        relevantAnswers.length === 0
-      ) {
-
-        return res.json({
-
-          success: true,
-
-          answer:
-            "The answer is not available in the provided document.",
-
-          generatedBy:
-            getGeneratedBy(
-              providerTracker
-            ),
-
-          providersUsed:
-            getProvidersUsed(
-              providerTracker
-            ),
-        });
-      }
-
-      // ------------------------------------------------------
-      // FINAL ANSWER
-      // ------------------------------------------------------
-
-      const finalPrompt = `
-
-You are SmartDoc AI.
-
-Answer the user's question using
-ONLY the information retrieved
-from the document.
-
-QUESTION:
-
-${question}
-
-RELEVANT DOCUMENT INFORMATION:
-
-${relevantAnswers.join(
-  "\n\n"
-)}
-
-RULES:
-
-- Do NOT add outside information.
-- Do NOT invent facts.
-- Combine the information accurately.
-- Remove repetition.
-- Include important details.
-- Preserve names.
-- Preserve dates.
-- Preserve numbers.
-- If the answer is not available,
-  say:
-
-"The answer is not available
-in the provided document."
-
-- If the question is in Malayalam,
-  answer completely in Malayalam.
-- Keep the answer simple.
-- Do not use Markdown symbols.
-
-Now provide the final answer.
-`;
-
-      const finalAnswer =
-        await askAI(
-
-          [
-            {
-              role: "system",
-
-              content:
-                "You are SmartDoc AI, an accurate Malayalam document question-answering assistant.",
-            },
-
-            {
-              role: "user",
-
-              content:
-                finalPrompt,
-            },
-          ],
-
-          {
-            maxCompletionTokens:
-              4096,
-
-            providerTracker,
-          }
-        );
-
-      return res.json({
-
-        success: true,
-
-        answer:
-          finalAnswer,
-
-        generatedBy:
-          getGeneratedBy(
             providerTracker
           ),
 
-        providersUsed:
-          getProvidersUsed(
-            providerTracker
-          ),
+        ],
+
+        status:
+          "completed",
+
       });
 
     } catch (error) {
 
       console.error(
-        "Ask Error:",
-        error
-      );
-
-      return sendError(
-
-        res,
-
-        error?.status || 500,
-
-        "AI failed to answer the question.",
-
+        "Transcript Summary Error:",
         error?.message ||
-          "Unknown error."
+          error
       );
+
+      return res.status(500).json({
+
+        success: false,
+
+        error:
+          "Unable to generate transcript summary.",
+
+        details:
+          error?.message ||
+          "Unknown summary error.",
+
+      });
+
     }
+
   }
 );
 
 // ==========================================================
-// EXPORT SERVER
+// START SERVER
 // ==========================================================
 
-export default app;
+app.listen(
+  PORT,
+  () => {
+
+    console.log(
+      "========================================"
+    );
+
+    console.log(
+      "SmartDoc AI backend started"
+    );
+
+    console.log(
+      `Server running on port ${PORT}`
+    );
+
+    console.log(
+      "========================================"
+    );
+
+  }
+);

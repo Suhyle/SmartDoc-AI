@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import './SelectExam.css'
 
@@ -247,26 +247,28 @@ const initialRecentExams = [
 export default function SelectExam() {
   const navigate = useNavigate()
 
-  const [selectedExam, setSelectedExam] = useState('')
+  // Multiple exam selection
+  const [selectedExams, setSelectedExams] = useState([])
+
   const [recentExams, setRecentExams] = useState(initialRecentExams)
   const [showValidation, setShowValidation] = useState(false)
 
 
-  const selectedCategory = useMemo(
-    () =>
-      examCategories.find(
-        (exam) => exam.id === selectedExam
-      ),
-    [selectedExam]
-  )
-
-
   /* =======================================================
-     SELECT EXAM
+     SELECT / DESELECT EXAM
   ======================================================= */
 
   const handleSelectExam = (exam) => {
-    setSelectedExam(exam.id)
+    setSelectedExams((previous) => {
+      const alreadySelected = previous.includes(exam.id)
+
+      if (alreadySelected) {
+        return previous.filter((id) => id !== exam.id)
+      }
+
+      return [...previous, exam.id]
+    })
+
     setShowValidation(false)
 
     setRecentExams((previous) => {
@@ -317,7 +319,7 @@ export default function SelectExam() {
 
   const handleCustomExam = () => {
     alert(
-      "Custom exam feature will be available soon."
+      'Custom exam feature will be available soon.'
     )
   }
 
@@ -328,7 +330,7 @@ export default function SelectExam() {
 
   const handleViewAll = () => {
     alert(
-      "More exam categories will be available soon."
+      'More exam categories will be available soon.'
     )
   }
 
@@ -336,20 +338,34 @@ export default function SelectExam() {
   /* =======================================================
      CONTINUE
   ======================================================= */
+  //folder funtion handling
 
-  const handleContinue = () => {
-    if (!selectedExam) {
-      setShowValidation(true)
-      return
-    }
-
-    console.log(
-      'Selected exam:',
-      selectedCategory?.title
-    )
-
-    navigate('/login')
+ const handleContinue = () => {
+  if (selectedExams.length === 0) {
+    setShowValidation(true)
+    return
   }
+
+  console.log('Selected exams:', selectedExams)
+
+  // Keep existing selected exam IDs
+  localStorage.setItem(
+    'smartdoc_selected_exams',
+    JSON.stringify(selectedExams)
+  )
+
+  // Store complete exam information for later use
+  const selectedExamDetails = examCategories.filter((exam) =>
+    selectedExams.includes(exam.id)
+  )
+
+  localStorage.setItem(
+    'smartdoc_selected_exam_details',
+    JSON.stringify(selectedExamDetails)
+  )
+
+  navigate('/login')
+}
 
 
   return (
@@ -421,6 +437,7 @@ export default function SelectExam() {
 
               </div>
 
+
               <span className="brand-logo-sparkle brand-logo-sparkle--one">
                 ✦
               </span>
@@ -457,7 +474,7 @@ export default function SelectExam() {
             className="header-circle-btn header-circle-btn--right"
             onClick={() =>
               alert(
-                'Choose an exam to personalize your learning experience.'
+                'Choose one or more exams to personalize your learning experience.'
               )
             }
             aria-label="Help"
@@ -483,7 +500,7 @@ export default function SelectExam() {
           </h2>
 
           <p className="main-subtitle">
-            Choose your exam to get personalized
+            Choose one or more exams to get personalized
             <br className="desktop-break" />
             YouTube recommendations and AI summaries
           </p>
@@ -515,6 +532,7 @@ export default function SelectExam() {
                 size={17}
                 stroke="currentColor"
               />
+
             </button>
 
           </div>
@@ -525,7 +543,7 @@ export default function SelectExam() {
             {examCategories.map((exam) => {
 
               const isSelected =
-                selectedExam === exam.id
+                selectedExams.includes(exam.id)
 
               return (
                 <button
@@ -735,7 +753,7 @@ export default function SelectExam() {
             className="validation-toast"
             role="alert"
           >
-            Please select an exam before continuing.
+            Please select at least one exam before continuing.
           </div>
         )}
 
@@ -761,7 +779,13 @@ export default function SelectExam() {
               />
 
               <span>
-                Continue
+                {selectedExams.length > 0
+                  ? `Continue with ${selectedExams.length} ${
+                      selectedExams.length === 1
+                        ? 'Exam'
+                        : 'Exams'
+                    }`
+                  : 'Continue'}
               </span>
 
             </span>

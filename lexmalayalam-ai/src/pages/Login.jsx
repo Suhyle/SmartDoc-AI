@@ -1,122 +1,296 @@
-import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { supabase } from '../supabase'
-import './Login.css'
+import { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { supabase } from "../supabase";
+import "./Login.css";
+
+// =========================================================
+// LOGIN PAGE
+// =========================================================
 
 export default function Login() {
-  const navigate = useNavigate()
+  const navigate = useNavigate();
 
-  const [showPassword, setShowPassword] = useState(false)
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [isLoading, setIsLoading] = useState(false)
+  // =======================================================
+  // STATE
+  // =======================================================
 
-  // ==========================================
+  const [showPassword, setShowPassword] = useState(false);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+
+  // =======================================================
   // LOGIN
-  // ==========================================
+  // =======================================================
 
   const handleLogin = async (e) => {
-    e.preventDefault()
+    e.preventDefault();
 
-    if (isLoading) return
+    // Prevent double click
+    if (isLoading) return;
 
-    setIsLoading(true)
+    setIsLoading(true);
 
     try {
+      // ===================================================
+      // 1. LOGIN WITH SUPABASE
+      // ===================================================
+
       const { data, error } =
         await supabase.auth.signInWithPassword({
           email: email.trim(),
           password: password,
-        })
+        });
+
+      // ===================================================
+      // LOGIN ERROR
+      // ===================================================
 
       if (error) {
-        alert(error.message)
-        return
+        console.error("Login failed:", error);
+        alert(error.message);
+        return;
       }
 
-      console.log('Login successful:', data)
+      console.log("Login successful:", data);
 
-      // After successful login, go to Home
-      navigate('/home')
+      // ===================================================
+      // 2. GET TEMPORARY SELECTED EXAMS
+      // ===================================================
+      //
+      // SelectExam.jsx stores the selected exams temporarily
+      // using:
+      //
+      // smartdoc_selected_exams
+      //
+      // Example:
+      //
+      // ["PSC", "UPSC"]
+      //
+      // This is only temporary storage.
+      //
+      // The permanent copy is saved in Supabase user metadata.
+      // ===================================================
+
+      const storedExams = localStorage.getItem(
+        "smartdoc_selected_exams"
+      );
+
+      // ===================================================
+      // 3. SAVE SELECTED EXAMS TO SUPABASE
+      // ===================================================
+
+      if (storedExams) {
+        try {
+          const selectedExams = JSON.parse(storedExams);
+
+          console.log(
+            "Selected exams received at Login:",
+            selectedExams
+          );
+
+          // Make sure the data is a valid non-empty array
+          if (
+            Array.isArray(selectedExams) &&
+            selectedExams.length > 0
+          ) {
+            // =================================================
+            // SAVE TO SUPABASE USER METADATA
+            // =================================================
+
+            const {
+              data: updatedUser,
+              error: updateError,
+            } = await supabase.auth.updateUser({
+              data: {
+                selected_exams: selectedExams,
+              },
+            });
+
+            // =================================================
+            // SUPABASE UPDATE ERROR
+            // =================================================
+
+            if (updateError) {
+              console.error(
+                "Failed to save selected exams:",
+                updateError
+              );
+
+              /*
+               * Login itself was successful.
+               *
+               * Therefore we do not block the user from
+               * entering the application.
+               */
+              console.warn(
+                "Login successful, but selected exams were not saved."
+              );
+            } else {
+              console.log(
+                "Selected exams saved successfully:",
+                updatedUser?.user?.user_metadata?.selected_exams
+              );
+
+              // =================================================
+              // REMOVE TEMPORARY STORAGE
+              // =================================================
+
+              localStorage.removeItem(
+                "smartdoc_selected_exams"
+              );
+            }
+          } else {
+            console.warn(
+              "Selected exam data is empty or invalid."
+            );
+          }
+        } catch (parseError) {
+          console.error(
+            "Invalid selected exam data:",
+            parseError
+          );
+        }
+      } else {
+        console.log(
+          "No temporary selected exam data found."
+        );
+      }
+
+      // ===================================================
+      // 4. GO TO HOME
+      // ===================================================
+
+      navigate("/home");
     } catch (error) {
-      console.error('Login error:', error)
-      alert('Something went wrong. Please try again.')
-    } finally {
-      setIsLoading(false)
-    }
-  }
+      // =====================================================
+      // LOGIN EXCEPTION
+      // =====================================================
 
-  // ==========================================
+      console.error("Login error:", error);
+
+      alert(
+        "Something went wrong. Please try again."
+      );
+    } finally {
+      // =====================================================
+      // STOP LOADING
+      // =====================================================
+
+      setIsLoading(false);
+    }
+  };
+
+  // =========================================================
   // FORGOT PASSWORD
-  // ==========================================
+  // =========================================================
 
   const handleForgotPassword = () => {
-    console.log('Forgot password clicked')
+    console.log("Forgot password clicked");
 
-    // Keep this for future password reset implementation.
-    // We can connect Supabase password reset later.
-  }
+    /*
+     * Password reset can be connected later.
+     *
+     * No device-specific API is used here.
+     *
+     * Compatible with:
+     * - Computer browser
+     * - Vercel
+     * - Mobile browser
+     * - Android APK
+     */
+  };
 
-  // ==========================================
+  // =========================================================
   // GOOGLE LOGIN
-  // ==========================================
+  // =========================================================
 
-  const handleGoogleLogin = () => {
-    console.log('Google login clicked')
+  const handleGoogleLogin = async () => {
+    console.log("Google login clicked");
 
-    // Google authentication can be connected later.
-  }
+    /*
+     * Google authentication can be connected later
+     * using Supabase OAuth.
+     *
+     * Supabase OAuth keeps authentication compatible with:
+     * - Web
+     * - Vercel
+     * - Mobile browser
+     * - Android APK
+     */
+  };
 
-  // ==========================================
+  // =========================================================
   // MICROSOFT LOGIN
-  // ==========================================
+  // =========================================================
 
-  const handleMicrosoftLogin = () => {
-    console.log('Microsoft login clicked')
+  const handleMicrosoftLogin = async () => {
+    console.log("Microsoft login clicked");
 
-    // Microsoft authentication can be connected later.
-  }
+    /*
+     * Microsoft authentication can be connected later
+     * using Supabase OAuth.
+     */
+  };
 
-  // ==========================================
+  // =========================================================
   // SIGN UP
-  // ==========================================
+  // =========================================================
 
   const handleSignUp = () => {
-    navigate('/signup')
-  }
+    navigate("/signup");
+  };
+
+  // =========================================================
+  // UI
+  // =========================================================
 
   return (
     <div className="login-page">
 
-      {/* ======================================
+      {/* =================================================
           DECORATIVE BACKGROUND
-      ====================================== */}
+      ================================================= */}
 
       <div className="bg-shape bg-shape--one" />
       <div className="bg-shape bg-shape--two" />
       <div className="bg-shape bg-shape--three" />
 
-      <span className="sparkle sparkle--a">✦</span>
-      <span className="sparkle sparkle--b">✧</span>
-      <span className="sparkle sparkle--c">✦</span>
-      <span className="sparkle sparkle--d">✧</span>
-      <span className="sparkle sparkle--e">✦</span>
+      <span className="sparkle sparkle--a">
+        ✦
+      </span>
 
+      <span className="sparkle sparkle--b">
+        ✧
+      </span>
 
-      {/* ======================================
+      <span className="sparkle sparkle--c">
+        ✦
+      </span>
+
+      <span className="sparkle sparkle--d">
+        ✧
+      </span>
+
+      <span className="sparkle sparkle--e">
+        ✦
+      </span>
+
+      {/* =================================================
           LOGIN CARD
-      ====================================== */}
+      ================================================= */}
 
       <div className="login-card">
 
-        {/* ====================================
+        {/* =================================================
             WELCOME HEADER
-        ==================================== */}
+        ================================================= */}
 
         <header className="login-header">
 
           <h1 className="login-title">
             Welcome Back
+
             <span className="wave-emoji">
               👋
             </span>
@@ -128,16 +302,16 @@ export default function Login() {
 
         </header>
 
-
-        {/* ====================================
+        {/* =================================================
             SMARTDOC AI BRAND
-        ==================================== */}
+        ================================================= */}
 
         <div className="brand-block">
 
           <div className="brand-icon-wrap">
 
-            {/* CC Badge */}
+            {/* CC BADGE */}
+
             <span
               className="brand-badge brand-badge--cc"
               aria-hidden="true"
@@ -145,8 +319,8 @@ export default function Login() {
               CC
             </span>
 
+            {/* MICROPHONE BADGE */}
 
-            {/* Microphone Badge */}
             <span
               className="brand-badge brand-badge--mic"
               aria-hidden="true"
@@ -160,6 +334,7 @@ export default function Login() {
                 strokeLinecap="round"
                 strokeLinejoin="round"
               >
+
                 <rect
                   x="9"
                   y="2"
@@ -171,12 +346,12 @@ export default function Login() {
                 <path d="M5 10a7 7 0 0 0 14 0" />
 
                 <path d="M12 19v3" />
+
               </svg>
 
             </span>
 
-
-            {/* Main SmartDoc Icon */}
+            {/* MAIN SMARTDOC ICON */}
 
             <div className="brand-icon">
 
@@ -194,7 +369,6 @@ export default function Login() {
                 ✦
               </span>
 
-
               <div className="brand-doc-card">
 
                 <div className="brand-doc-fold" />
@@ -204,7 +378,6 @@ export default function Login() {
                 </div>
 
                 <span className="brand-doc-line brand-doc-line--1" />
-
                 <span className="brand-doc-line brand-doc-line--2" />
 
               </div>
@@ -213,16 +386,13 @@ export default function Login() {
 
           </div>
 
-
-          {/* Brand Name */}
+          {/* BRAND NAME */}
 
           <h2 className="brand-title">
 
             <span className="brand-title-main">
               SmartDoc
-            </span>
-
-            {' '}
+            </span>{" "}
 
             <span className="brand-title-accent">
               AI
@@ -230,17 +400,15 @@ export default function Login() {
 
           </h2>
 
-
           <p className="brand-subtitle">
             AI-Powered Exam Learning Assistant
           </p>
 
         </div>
 
-
-        {/* ====================================
+        {/* =================================================
             LOGIN FORM
-        ==================================== */}
+        ================================================= */}
 
         <form
           className="login-form"
@@ -280,7 +448,6 @@ export default function Login() {
 
             </span>
 
-
             <input
               type="email"
               placeholder="Email Address"
@@ -293,7 +460,6 @@ export default function Login() {
             />
 
           </label>
-
 
           {/* PASSWORD */}
 
@@ -331,12 +497,11 @@ export default function Login() {
 
             </span>
 
-
             <input
               type={
                 showPassword
-                  ? 'text'
-                  : 'password'
+                  ? "text"
+                  : "password"
               }
               placeholder="Password"
               value={password}
@@ -346,7 +511,6 @@ export default function Login() {
               autoComplete="current-password"
               required
             />
-
 
             {/* SHOW / HIDE PASSWORD */}
 
@@ -360,8 +524,8 @@ export default function Login() {
               }
               aria-label={
                 showPassword
-                  ? 'Hide password'
-                  : 'Show password'
+                  ? "Hide password"
+                  : "Show password"
               }
             >
 
@@ -428,7 +592,6 @@ export default function Login() {
 
           </label>
 
-
           {/* FORGOT PASSWORD */}
 
           <div className="forgot-row">
@@ -442,7 +605,6 @@ export default function Login() {
             </button>
 
           </div>
-
 
           {/* LOGIN BUTTON */}
 
@@ -470,10 +632,9 @@ export default function Login() {
 
         </form>
 
-
-        {/* ====================================
+        {/* =================================================
             DIVIDER
-        ==================================== */}
+        ================================================= */}
 
         <div className="divider">
 
@@ -487,10 +648,9 @@ export default function Login() {
 
         </div>
 
-
-        {/* ====================================
+        {/* =================================================
             SOCIAL LOGIN
-        ==================================== */}
+        ================================================= */}
 
         <div className="social-buttons">
 
@@ -533,7 +693,6 @@ export default function Login() {
             Google
 
           </button>
-
 
           {/* MICROSOFT */}
 
@@ -589,14 +748,13 @@ export default function Login() {
 
         </div>
 
-
-        {/* ====================================
+        {/* =================================================
             SIGN UP
-        ==================================== */}
+        ================================================= */}
 
         <p className="signup-text">
 
-          Don&apos;t have an account?{' '}
+          Don&apos;t have an account?{" "}
 
           <button
             type="button"
@@ -611,5 +769,5 @@ export default function Login() {
       </div>
 
     </div>
-  )
+  );
 }

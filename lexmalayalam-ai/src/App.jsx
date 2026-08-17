@@ -11,7 +11,7 @@ import Signup from "./pages/Signup";
 
 
 // =========================================================
-// New Select Exam Page
+// Select Exam Page
 // =========================================================
 
 import SelectExam from "./pages/SelectExam";
@@ -25,13 +25,15 @@ import SplashLoader from "./components/SplashLoader";
 
 
 // =========================================================
-// Existing Application Pages
+// Application Pages
 // =========================================================
 
 import Home from "./pages/Home";
 import Upload from "./pages/Upload";
 import UrlUpload from "./pages/UrlUpload";
 import Documents from "./pages/Documents";
+import Downloads from "./pages/Downloads";
+import Transcript from "./pages/Transcript";
 import Chat from "./pages/Chat";
 import Profile from "./pages/Profile";
 import EmailVerified from "./pages/EmailVerified";
@@ -85,7 +87,7 @@ function App() {
 
       {/* ===================================================
           Select Exam
-          
+
           Current flow:
           Signup → Select Exam → Login
       =================================================== */}
@@ -137,6 +139,32 @@ function App() {
       <Route
         path="/documents"
         element={<Documents />}
+      />
+
+
+      {/* ===================================================
+          Downloads / PDF Library
+      =================================================== */}
+
+      <Route
+        path="/downloads"
+        element={<Downloads />}
+      />
+
+
+      {/* ===================================================
+          Transcript & Summary
+
+          YouTube Video
+          Multiple Videos
+          Video Upload
+          Transcript Settings
+          Summary Options
+      =================================================== */}
+
+      <Route
+        path="/transcript-summary"
+        element={<Transcript />}
       />
 
 

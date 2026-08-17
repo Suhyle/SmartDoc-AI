@@ -1,0 +1,706 @@
+/* =========================================================
+   DOWNLOADS PAGE
+   (bottom nav intentionally NOT styled here — reuses
+   .sd-bottom-nav etc. from Home.css)
+========================================================= */
+
+.downloads-page {
+  min-height: 100vh;
+  background: #f8f7fc;
+  padding: 30px 20px 130px; /* extra bottom space so fixed nav never overlaps content */
+  box-sizing: border-box;
+}
+
+.downloads-container {
+  width: 100%;
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+
+/* =========================================================
+   HEADER
+========================================================= */
+
+.downloads-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+}
+
+.downloads-back-btn {
+  width: 42px;
+  height: 42px;
+  border: none;
+  border-radius: 50%;
+  background: #ffffff;
+  color: #30265a;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(48, 38, 90, 0.08);
+  flex-shrink: 0;
+}
+
+.downloads-back-btn:hover {
+  transform: translateY(-1px);
+}
+
+.downloads-header-title h1 {
+  margin: 0;
+  color: #30265a;
+  font-size: 1.7rem;
+  font-weight: 800;
+}
+
+.downloads-header-title p {
+  margin: 5px 0 0;
+  color: #77718a;
+  font-size: 0.9rem;
+}
+
+.downloads-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: auto;
+}
+
+.downloads-search-box {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #ffffff;
+  border: 1px solid #eeeaf7;
+  border-radius: 12px;
+  padding: 10px 14px;
+  min-width: 220px;
+  box-shadow: 0 4px 14px rgba(48, 38, 90, 0.05);
+}
+
+.downloads-search-icon {
+  color: #a79ecb;
+  flex-shrink: 0;
+}
+
+.downloads-search-box input {
+  border: none;
+  outline: none;
+  background: transparent;
+  font-size: 0.85rem;
+  color: #30265a;
+  width: 100%;
+}
+
+.downloads-search-box input::placeholder {
+  color: #a79ecb;
+}
+
+.downloads-filter-wrapper {
+  position: relative;
+}
+
+.downloads-filter-btn {
+  width: 42px;
+  height: 42px;
+  border: 1px solid #eeeaf7;
+  border-radius: 12px;
+  background: #f0ebff;
+  color: #7655d9;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.downloads-filter-btn:hover {
+  background: #e6ddff;
+}
+
+.downloads-filter-menu {
+  position: absolute;
+  right: 0;
+  top: 50px;
+  background: #ffffff;
+  border: 1px solid #eeeaf7;
+  border-radius: 14px;
+  box-shadow: 0 10px 30px rgba(48, 38, 90, 0.12);
+  padding: 8px;
+  min-width: 160px;
+  z-index: 50;
+}
+
+.downloads-filter-option {
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: transparent;
+  padding: 9px 10px;
+  border-radius: 9px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #30265a;
+  cursor: pointer;
+}
+
+.downloads-filter-option:hover {
+  background: #f8f7fc;
+}
+
+.downloads-filter-option.active {
+  background: #f0ebff;
+  color: #7655d9;
+}
+
+
+/* =========================================================
+   CATEGORY HEADER
+========================================================= */
+
+.downloads-category-header {
+  background: #ffffff;
+  border: 1px solid #eeeaf7;
+  border-radius: 18px;
+  padding: 18px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+  box-shadow: 0 5px 20px rgba(48, 38, 90, 0.06);
+  gap: 12px;
+}
+
+.downloads-category-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: #7655d9;
+}
+
+.downloads-category-title span {
+  color: #30265a;
+  font-weight: 700;
+  font-size: 1rem;
+  display: block;
+}
+
+.downloads-category-title p {
+  margin: 2px 0 0;
+  color: #77718a;
+  font-size: 0.78rem;
+  font-weight: 500;
+}
+
+.downloads-count-badge {
+  text-align: right;
+  background: #f0ebff;
+  border-radius: 14px;
+  padding: 8px 16px;
+}
+
+.downloads-count-badge span {
+  color: #7655d9;
+  font-weight: 800;
+  font-size: 0.95rem;
+  display: block;
+}
+
+.downloads-count-badge p {
+  margin: 2px 0 0;
+  color: #8a80a8;
+  font-size: 0.68rem;
+  font-weight: 600;
+}
+
+
+/* =========================================================
+   STATS CARDS
+========================================================= */
+
+.downloads-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px;
+  margin-bottom: 26px;
+}
+
+.downloads-stat-card {
+  background: #ffffff;
+  border: 1px solid #eeeaf7;
+  border-radius: 16px;
+  padding: 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  box-shadow: 0 5px 18px rgba(48, 38, 90, 0.05);
+}
+
+.downloads-stat-icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.downloads-stat-icon.purple { background: #f0ebff; color: #7655d9; }
+.downloads-stat-icon.green  { background: #dcfbe7; color: #17a34a; }
+.downloads-stat-icon.amber  { background: #fef3c7; color: #d97706; }
+.downloads-stat-icon.blue   { background: #dbeafe; color: #2563eb; }
+
+.downloads-stat-card h3 {
+  margin: 0;
+  font-size: 1.3rem;
+  font-weight: 800;
+  color: #30265a;
+}
+
+.downloads-stat-card p {
+  margin: 2px 0 0;
+  font-size: 0.75rem;
+  color: #77718a;
+  font-weight: 600;
+}
+
+
+/* =========================================================
+   YOUR PDFs LIST HEADER
+========================================================= */
+
+.downloads-list-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.downloads-list-header h2 {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: #30265a;
+}
+
+.downloads-sort-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.82rem;
+  color: #77718a;
+  font-weight: 600;
+}
+
+.downloads-sort-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  border: none;
+  background: transparent;
+  color: #7655d9;
+  font-weight: 800;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.downloads-sort-menu {
+  position: absolute;
+  right: 0;
+  top: 30px;
+  background: #ffffff;
+  border: 1px solid #eeeaf7;
+  border-radius: 14px;
+  box-shadow: 0 10px 30px rgba(48, 38, 90, 0.12);
+  padding: 8px;
+  min-width: 140px;
+  z-index: 50;
+}
+
+.downloads-sort-option {
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: transparent;
+  padding: 9px 10px;
+  border-radius: 9px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #30265a;
+  cursor: pointer;
+}
+
+.downloads-sort-option:hover {
+  background: #f8f7fc;
+}
+
+.downloads-sort-option.active {
+  background: #f0ebff;
+  color: #7655d9;
+}
+
+
+/* =========================================================
+   PDF LIST + CARD
+========================================================= */
+
+.downloads-pdf-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.downloads-pdf-card {
+  background: #ffffff;
+  border: 1px solid #eeeaf7;
+  border-radius: 18px;
+  padding: 18px 20px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  box-shadow: 0 5px 18px rgba(48, 38, 90, 0.05);
+}
+
+.downloads-pdf-icon {
+  width: 52px;
+  height: 52px;
+  border-radius: 14px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f0ebff;
+  color: #7655d9;
+}
+
+.downloads-pdf-icon.cat-psc     { background: #fde3e3; color: #dc2626; }
+.downloads-pdf-icon.cat-ssc     { background: #dbeafe; color: #2563eb; }
+.downloads-pdf-icon.cat-upsc    { background: #dcfbe7; color: #17a34a; }
+.downloads-pdf-icon.cat-bank    { background: #fef3c7; color: #d97706; }
+.downloads-pdf-icon.cat-railway { background: #f0ebff; color: #7655d9; }
+
+.downloads-pdf-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.downloads-pdf-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.downloads-pdf-title-row h3 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 800;
+  color: #30265a;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.downloads-bookmark-icon {
+  color: #7655d9;
+  fill: #7655d9;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.downloads-category-tag {
+  display: inline-block;
+  margin-top: 6px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: #f0ebff;
+  color: #7655d9;
+  font-size: 0.68rem;
+  font-weight: 700;
+}
+
+.downloads-pdf-meta {
+  margin: 6px 0 0;
+  font-size: 0.78rem;
+  color: #77718a;
+}
+
+.downloads-pdf-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.downloads-pdf-status-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.downloads-status-pill {
+  padding: 4px 12px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.downloads-status-pill.completed {
+  background: #dcfbe7;
+  color: #17a34a;
+}
+
+.downloads-status-pill.pending {
+  background: #fef3c7;
+  color: #d97706;
+}
+
+.downloads-more-btn {
+  border: none;
+  background: transparent;
+  color: #a79ecb;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.downloads-more-btn:hover {
+  color: #7655d9;
+}
+
+.downloads-pdf-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.downloads-action-btn {
+  width: 38px;
+  height: 38px;
+  border: 1px solid #eeeaf7;
+  border-radius: 10px;
+  background: #ffffff;
+  color: #30265a;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.downloads-action-btn:hover {
+  background: #f8f7fc;
+}
+
+.downloads-action-btn.ai-chat {
+  width: auto;
+  padding: 0 14px;
+  background: #7655d9;
+  color: #ffffff;
+  border: none;
+  gap: 6px;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.downloads-action-btn.ai-chat:hover {
+  background: #6546c4;
+}
+
+
+/* =========================================================
+   CREATE MORE PDFs CARD
+========================================================= */
+
+.downloads-create-more-card {
+  border: 2px dashed #d6ccf5;
+  border-radius: 20px;
+  padding: 20px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  background: #fbfaff;
+}
+
+.downloads-create-more-icon {
+  width: 46px;
+  height: 46px;
+  border-radius: 14px;
+  background: #f0ebff;
+  color: #7655d9;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.downloads-create-more-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.downloads-create-more-info h3 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 800;
+  color: #30265a;
+}
+
+.downloads-create-more-info p {
+  margin: 4px 0 0;
+  font-size: 0.8rem;
+  color: #77718a;
+}
+
+
+/* =========================================================
+   EMPTY STATE
+========================================================= */
+
+.downloads-empty-state {
+  background: #ffffff;
+  border: 1px solid #eeeaf7;
+  border-radius: 22px;
+  padding: 70px 25px;
+  text-align: center;
+  box-shadow: 0 5px 20px rgba(48, 38, 90, 0.06);
+}
+
+.downloads-empty-icon {
+  width: 78px;
+  height: 78px;
+  margin: 0 auto 20px;
+  border-radius: 22px;
+  background: #f0ebff;
+  color: #7655d9;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.downloads-empty-state h2 {
+  margin: 0 0 8px;
+  color: #30265a;
+  font-size: 1.3rem;
+  font-weight: 800;
+}
+
+.downloads-empty-state p {
+  margin: 0 0 25px;
+  color: #77718a;
+  font-size: 0.9rem;
+}
+
+
+/* =========================================================
+   CREATE PDF BUTTON
+========================================================= */
+
+.downloads-create-btn {
+  border: none;
+  border-radius: 12px;
+  padding: 12px 20px;
+  background: #7655d9;
+  color: #ffffff;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.9rem;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 6px 15px rgba(118, 85, 217, 0.22);
+  flex-shrink: 0;
+}
+
+.downloads-create-btn:hover {
+  background: #6546c4;
+  transform: translateY(-1px);
+}
+
+
+/* =========================================================
+   MOBILE
+========================================================= */
+
+@media (max-width: 900px) {
+
+  .downloads-stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .downloads-pdf-card {
+    flex-wrap: wrap;
+  }
+
+  .downloads-pdf-right {
+    width: 100%;
+    align-items: flex-start;
+  }
+
+  .downloads-pdf-status-row {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .downloads-pdf-actions {
+    width: 100%;
+  }
+
+  .downloads-action-btn {
+    flex: 1;
+  }
+
+  .downloads-action-btn.ai-chat {
+    flex: 1.4;
+    justify-content: center;
+  }
+
+}
+
+@media (max-width: 600px) {
+
+  .downloads-page {
+    padding: 20px 14px 120px;
+  }
+
+  .downloads-header {
+    gap: 12px;
+  }
+
+  .downloads-header-title h1 {
+    font-size: 1.4rem;
+  }
+
+  .downloads-header-actions {
+    width: 100%;
+    margin-left: 0;
+  }
+
+  .downloads-search-box {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .downloads-category-header {
+    padding: 15px;
+    flex-wrap: wrap;
+  }
+
+  .downloads-create-more-card {
+    flex-wrap: wrap;
+  }
+
+  .downloads-create-more-card .downloads-create-btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .downloads-empty-state {
+    padding: 55px 20px;
+  }
+
+}
