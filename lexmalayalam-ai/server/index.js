@@ -44,18 +44,23 @@ const CEREBRAS_API_KEY =
 // ==========================================================
 // AI CLIENTS
 // ==========================================================
+const gemini = GEMINI_API_KEY
+  ? new GoogleGenAI({
+      apiKey: GEMINI_API_KEY,
+    })
+  : null;
 
-const gemini = new GoogleGenAI({
-  apiKey: GEMINI_API_KEY,
-});
+const groq = GROQ_API_KEY
+  ? new Groq({
+      apiKey: GROQ_API_KEY,
+    })
+  : null;
 
-const groq = new Groq({
-  apiKey: GROQ_API_KEY,
-});
-
-const cerebras = new Cerebras({
-  apiKey: CEREBRAS_API_KEY,
-});
+const cerebras = CEREBRAS_API_KEY
+  ? new Cerebras({
+      apiKey: CEREBRAS_API_KEY,
+    })
+  : null;
 
 // ==========================================================
 // AI MODELS
