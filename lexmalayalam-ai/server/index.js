@@ -699,7 +699,8 @@ function formatSecondsAsDuration(
 
   const minutes =
     Math.floor(
-      (totalSeconds % 3600) / 60
+      (totalSeconds % 3600) /
+      60
     );
 
   const remainingSeconds =
@@ -710,32 +711,36 @@ function formatSecondsAsDuration(
   ) {
 
     return [
-
-      String(hours)
-        .padStart(2, "0"),
-
-      String(minutes)
-        .padStart(2, "0"),
-
+      String(hours).padStart(
+        2,
+        "0"
+      ),
+      String(minutes).padStart(
+        2,
+        "0"
+      ),
       String(
         remainingSeconds
-      ).padStart(2, "0"),
-
+      ).padStart(
+        2,
+        "0"
+      ),
     ].join(":");
   }
 
   return [
-
-    String(minutes)
-      .padStart(2, "0"),
-
+    String(minutes).padStart(
+      2,
+      "0"
+    ),
     String(
       remainingSeconds
-    ).padStart(2, "0"),
-
+    ).padStart(
+      2,
+      "0"
+    ),
   ].join(":");
 }
-
 // ==========================================================
 // APPLY TRANSCRIPT TIME FILTER
 // ==========================================================
@@ -750,15 +755,10 @@ function applyTranscriptTimeFilter(
 ) {
 
   if (
-    !Array.isArray(
-      transcriptData
-    ) ||
+    !Array.isArray(transcriptData) ||
     transcriptData.length === 0
   ) {
-
-    return (
-      transcriptData || []
-    );
+    return transcriptData || [];
   }
 
   // --------------------------------------------------------
@@ -769,7 +769,6 @@ function applyTranscriptTimeFilter(
     !transcriptMode ||
     transcriptMode === "full"
   ) {
-
     return transcriptData;
   }
 
@@ -782,24 +781,15 @@ function applyTranscriptTimeFilter(
   ) {
 
     const startSeconds =
-      timeToSeconds(
-        startTime
-      );
+      timeToSeconds(startTime);
 
     const endSeconds =
-      timeToSeconds(
-        endTime
-      );
+      timeToSeconds(endTime);
 
     if (
-      !Number.isFinite(
-        startSeconds
-      ) ||
-      !Number.isFinite(
-        endSeconds
-      )
+      !Number.isFinite(startSeconds) ||
+      !Number.isFinite(endSeconds)
     ) {
-
       throw new Error(
         "Please enter valid start and end times in HH:MM:SS or MM:SS format."
       );
@@ -809,7 +799,6 @@ function applyTranscriptTimeFilter(
       startSeconds < 0 ||
       endSeconds <= startSeconds
     ) {
-
       throw new Error(
         "End time must be greater than start time."
       );
@@ -821,10 +810,8 @@ function applyTranscriptTimeFilter(
       );
 
     if (
-      startSeconds >=
-      fullDuration
+      startSeconds >= fullDuration
     ) {
-
       throw new Error(
         "The selected start time is beyond the available transcript duration."
       );
@@ -850,16 +837,9 @@ function applyTranscriptTimeFilter(
             segment
           );
 
-        /*
-          Include captions that
-          overlap the selected range.
-        */
-
         return (
-          segmentEnd >
-            startSeconds &&
-          segmentStart <
-            safeEndSeconds
+          segmentEnd > startSeconds &&
+          segmentStart < safeEndSeconds
         );
       }
     );
@@ -874,17 +854,12 @@ function applyTranscriptTimeFilter(
   ) {
 
     const numericLimit =
-      Number(
-        durationLimit
-      );
+      Number(durationLimit);
 
     if (
-      !Number.isFinite(
-        numericLimit
-      ) ||
+      !Number.isFinite(numericLimit) ||
       numericLimit <= 0
     ) {
-
       throw new Error(
         "Duration limit must be greater than 0."
       );
@@ -896,11 +871,8 @@ function applyTranscriptTimeFilter(
       ).toLowerCase();
 
     const limitSeconds =
-      normalizedUnit ===
-      "seconds"
-
+      normalizedUnit === "seconds"
         ? numericLimit
-
         : numericLimit * 60;
 
     return transcriptData.filter(
@@ -938,9 +910,7 @@ function cleanSummaryOutput(
   let cleaned =
     String(text);
 
-  // --------------------------------------------------------
   // REMOVE CODE FENCES
-  // --------------------------------------------------------
 
   cleaned =
     cleaned.replace(
@@ -954,9 +924,7 @@ function cleanSummaryOutput(
       ""
     );
 
-  // --------------------------------------------------------
   // REMOVE HORIZONTAL MARKDOWN RULES
-  // --------------------------------------------------------
 
   cleaned =
     cleaned.replace(
@@ -964,9 +932,7 @@ function cleanSummaryOutput(
       ""
     );
 
-  // --------------------------------------------------------
   // REMOVE MARKDOWN HEADINGS
-  // --------------------------------------------------------
 
   cleaned =
     cleaned.replace(
@@ -974,9 +940,7 @@ function cleanSummaryOutput(
       ""
     );
 
-  // --------------------------------------------------------
   // REMOVE BOLD MARKERS
-  // --------------------------------------------------------
 
   cleaned =
     cleaned.replace(
@@ -990,9 +954,7 @@ function cleanSummaryOutput(
       "$1"
     );
 
-  // --------------------------------------------------------
   // REMOVE ITALIC MARKERS
-  // --------------------------------------------------------
 
   cleaned =
     cleaned.replace(
@@ -1006,9 +968,7 @@ function cleanSummaryOutput(
       "$1$2"
     );
 
-  // --------------------------------------------------------
   // CONVERT MARKDOWN BULLETS
-  // --------------------------------------------------------
 
   cleaned =
     cleaned.replace(
@@ -1016,9 +976,7 @@ function cleanSummaryOutput(
       "• "
     );
 
-  // --------------------------------------------------------
   // KEEP NUMBERED LISTS CLEAN
-  // --------------------------------------------------------
 
   cleaned =
     cleaned.replace(
@@ -1034,9 +992,7 @@ function cleanSummaryOutput(
       }
     );
 
-  // --------------------------------------------------------
   // REMOVE BLOCKQUOTE MARKERS
-  // --------------------------------------------------------
 
   cleaned =
     cleaned.replace(
@@ -1044,9 +1000,7 @@ function cleanSummaryOutput(
       ""
     );
 
-  // --------------------------------------------------------
   // REMOVE EXTRA SEPARATORS
-  // --------------------------------------------------------
 
   cleaned =
     cleaned.replace(
@@ -1054,9 +1008,7 @@ function cleanSummaryOutput(
       ""
     );
 
-  // --------------------------------------------------------
   // REMOVE EXCESSIVE BLANK LINES
-  // --------------------------------------------------------
 
   cleaned =
     cleaned.replace(
@@ -1064,9 +1016,7 @@ function cleanSummaryOutput(
       "\n\n"
     );
 
-  // --------------------------------------------------------
   // REMOVE SPACES BEFORE PUNCTUATION
-  // --------------------------------------------------------
 
   cleaned =
     cleaned.replace(
@@ -1074,9 +1024,7 @@ function cleanSummaryOutput(
       "$1"
     );
 
-  // --------------------------------------------------------
   // REMOVE UNNECESSARY SPACES
-  // --------------------------------------------------------
 
   cleaned =
     cleaned.replace(
@@ -1084,9 +1032,7 @@ function cleanSummaryOutput(
       " "
     );
 
-  // --------------------------------------------------------
   // FIX BULLET SPACING
-  // --------------------------------------------------------
 
   cleaned =
     cleaned.replace(
@@ -1094,9 +1040,7 @@ function cleanSummaryOutput(
       "• "
     );
 
-  // --------------------------------------------------------
   // REMOVE EMPTY BULLETS
-  // --------------------------------------------------------
 
   cleaned =
     cleaned.replace(
@@ -1104,9 +1048,7 @@ function cleanSummaryOutput(
       ""
     );
 
-  // --------------------------------------------------------
   // TRIM EACH LINE
-  // --------------------------------------------------------
 
   cleaned =
     cleaned
@@ -1117,9 +1059,7 @@ function cleanSummaryOutput(
       )
       .join("\n");
 
-  // --------------------------------------------------------
   // FINAL BLANK-LINE CLEANUP
-  // --------------------------------------------------------
 
   cleaned =
     cleaned.replace(
@@ -1144,9 +1084,7 @@ app.get(
 
       message:
         "SmartDoc AI backend is running.",
-
     });
-
   }
 );
 
@@ -1175,11 +1113,8 @@ app.get(
         PROVIDERS.CEREBRAS,
 
         PROVIDERS.GROQ,
-
       ],
-
     });
-
   }
 );
 
@@ -1195,8 +1130,7 @@ app.post(
 
       const message =
         String(
-          req.body?.message ||
-            ""
+          req.body?.message || ""
         ).trim();
 
       if (!message) {
@@ -1207,9 +1141,7 @@ app.post(
 
           error:
             "Message is required.",
-
         });
-
       }
 
       const providerTracker =
@@ -1242,9 +1174,7 @@ app.post(
               1024,
 
             providerTracker,
-
           }
-
         );
 
       return res.json({
@@ -1260,21 +1190,17 @@ app.post(
           "SmartDoc AI",
 
         providersUsed: [
-
           ...new Set(
             providerTracker
           ),
-
         ],
-
       });
 
     } catch (error) {
 
       console.error(
         "AI Test Error:",
-        error?.message ||
-          error
+        error?.message || error
       );
 
       return res.status(500).json({
@@ -1287,11 +1213,8 @@ app.post(
         details:
           error?.message ||
           "Unknown error.",
-
       });
-
     }
-
   }
 );
 
@@ -1345,9 +1268,7 @@ app.post(
 
           error:
             "YouTube video URL is required.",
-
         });
-
       }
 
       // ------------------------------------------------------
@@ -1367,9 +1288,7 @@ app.post(
 
           error:
             "Invalid YouTube video URL.",
-
         });
-
       }
 
       console.log(
@@ -1417,7 +1336,7 @@ app.post(
       );
 
       // ------------------------------------------------------
-      // FETCH FULL TRANSCRIPT
+      // FETCH YOUTUBE TRANSCRIPT
       // ------------------------------------------------------
 
       let transcriptData;
@@ -1429,141 +1348,160 @@ app.post(
             videoId
           );
 
-      } catch (
-        transcriptError
-      ) {
+      } catch (error) {
 
         console.error(
-          "Transcript retrieval failed:",
-          transcriptError?.message ||
-            transcriptError
+          "YouTube transcript fetch error:",
+          error?.message || error
         );
 
-        throw new Error(
-          "Unable to retrieve the YouTube transcript."
-        );
+        return res.status(400).json({
+
+          success: false,
+
+          error:
+            "Unable to retrieve the YouTube transcript.",
+
+          details:
+            error?.message ||
+            "The video may not contain accessible captions.",
+        });
       }
 
-      // ------------------------------------------------------
-      // CHECK RESULT
-      // ------------------------------------------------------
-
       if (
-        !transcriptData ||
         !Array.isArray(
           transcriptData
         ) ||
         transcriptData.length === 0
       ) {
 
-        throw new Error(
-          "No transcript was found for this video."
-        );
+        return res.status(400).json({
 
+          success: false,
+
+          error:
+            "No transcript was found for this YouTube video.",
+        });
       }
 
       // ------------------------------------------------------
       // FULL VIDEO DURATION
       // ------------------------------------------------------
 
-      const fullVideoDurationSeconds =
+      const fullDurationSeconds =
         getTranscriptDurationSeconds(
           transcriptData
         );
 
-      const fullVideoDuration =
-        formatSecondsAsDuration(
-          fullVideoDurationSeconds
-        );
-
       // ------------------------------------------------------
-      // APPLY USER TRANSCRIPT SETTINGS
+      // APPLY USER'S TRANSCRIPT RANGE
       // ------------------------------------------------------
 
-      const filteredTranscriptData =
-        applyTranscriptTimeFilter(
+      let selectedSegments;
 
-          transcriptData,
+      try {
 
-          transcriptMode,
+        selectedSegments =
+          applyTranscriptTimeFilter(
+            transcriptData,
+            transcriptMode,
+            startTime,
+            endTime,
+            durationLimit,
+            durationUnit
+          );
 
-          startTime,
+      } catch (error) {
 
-          endTime,
+        return res.status(400).json({
 
-          durationLimit,
+          success: false,
 
-          durationUnit
-
-        );
-
-      // ------------------------------------------------------
-      // CHECK FILTERED RESULT
-      // ------------------------------------------------------
+          error:
+            error?.message ||
+            "Invalid transcript settings.",
+        });
+      }
 
       if (
-        !filteredTranscriptData ||
-        filteredTranscriptData.length === 0
+        !Array.isArray(
+          selectedSegments
+        ) ||
+        selectedSegments.length === 0
       ) {
 
-        throw new Error(
-          "No transcript content was found in the selected time range."
-        );
+        return res.status(400).json({
 
+          success: false,
+
+          error:
+            "No transcript content exists in the selected time range.",
+        });
       }
 
       // ------------------------------------------------------
-      // FORMAT SELECTED TRANSCRIPT
+      // FORMAT TRANSCRIPT
       // ------------------------------------------------------
+
+      const includeTimestamps =
+        additionalOptions
+          ?.includeTimestamps !== false;
 
       const transcript =
-        filteredTranscriptData
-
+        selectedSegments
           .map(
-            (item) =>
-              String(
-                item?.text ||
-                  ""
-              )
+            (segment) => {
+
+              const text =
+                String(
+                  segment?.text || ""
+                ).trim();
+
+              if (!text) {
+                return "";
+              }
+
+              if (
+                !includeTimestamps
+              ) {
+                return text;
+              }
+
+              const timestamp =
+                formatSecondsAsDuration(
+                  getSegmentStartSeconds(
+                    segment
+                  )
+                );
+
+              return `[${timestamp}] ${text}`;
+            }
           )
+          .filter(Boolean)
+          .join("\n");
 
-          .join(" ")
+      if (!transcript.trim()) {
 
-          .replace(
-            /\s+/g,
-            " "
-          )
+        return res.status(400).json({
 
-          .trim();
+          success: false,
 
-      // ------------------------------------------------------
-      // CHECK READABLE TRANSCRIPT
-      // ------------------------------------------------------
-
-      if (!transcript) {
-
-        throw new Error(
-          "The selected time range contains no readable transcript."
-        );
-
+          error:
+            "The selected transcript was empty.",
+        });
       }
 
       // ------------------------------------------------------
-      // SELECTED DURATION
+      // SELECTED TRANSCRIPT DURATION
       // ------------------------------------------------------
 
       const selectedDurationSeconds =
         getTranscriptDurationSeconds(
-          filteredTranscriptData
-        );
-
-      const selectedDuration =
-        formatSecondsAsDuration(
-          selectedDurationSeconds
+          selectedSegments
         );
 
       // ------------------------------------------------------
-      // SUCCESS LOG
+      // RESPONSE
       // ------------------------------------------------------
 
       console.log(
@@ -1577,7 +1515,7 @@ app.post(
 
       console.log(
         "Selected transcript segments:",
-        filteredTranscriptData.length
+        selectedSegments.length
       );
 
       console.log(
@@ -1587,107 +1525,72 @@ app.post(
 
       console.log(
         "Full video duration:",
-        fullVideoDuration ||
-          "Not available"
+        formatSecondsAsDuration(
+          fullDurationSeconds
+        )
       );
 
       console.log(
         "Selected transcript duration:",
-        selectedDuration ||
-          "Not available"
+        formatSecondsAsDuration(
+          selectedDurationSeconds
+        )
       );
 
       console.log(
         "========================================"
       );
 
-      // ------------------------------------------------------
-      // RETURN RESULT
-      // ------------------------------------------------------
-
       return res.json({
 
         success: true,
 
-        videoUrl,
+        transcript,
 
         videoId,
 
+        videoUrl,
+
+        language,
+
         sourceLanguage:
-          transcriptData?.[0]?.lang ||
-          null,
-
-        requestedOutputLanguage:
           language,
-
-        transcript,
-
-        segments:
-          filteredTranscriptData,
-
-        fullSegments:
-          transcriptData,
-
-        segmentCount:
-          filteredTranscriptData.length,
-
-        totalSegmentCount:
-          transcriptData.length,
-
-        characterCount:
-          transcript.length,
 
         transcriptMode,
 
-        selectedStartTime:
-          transcriptMode ===
-          "custom"
-            ? startTime
-            : "00:00:00",
+        duration:
+          formatSecondsAsDuration(
+            fullDurationSeconds
+          ),
 
-        selectedEndTime:
-          transcriptMode ===
-          "custom"
-            ? endTime
-            : null,
+        fullDuration:
+          formatSecondsAsDuration(
+            fullDurationSeconds
+          ),
 
-        durationLimit:
-          transcriptMode ===
-          "duration"
-            ? Number(
-                durationLimit
-              )
-            : null,
+        selectedDuration:
+          formatSecondsAsDuration(
+            selectedDurationSeconds
+          ),
 
-        durationUnit:
-          transcriptMode ===
-          "duration"
-            ? durationUnit
-            : null,
-
-        fullVideoDurationSeconds,
-
-        videoDuration:
-          fullVideoDuration ||
-          null,
+        fullDurationSeconds,
 
         selectedDurationSeconds,
 
-        selectedDuration:
-          selectedDuration ||
-          null,
+        segmentCount:
+          selectedSegments.length,
 
         status:
           "completed",
 
+        additionalOptions,
       });
 
     } catch (error) {
 
       console.error(
-        "Transcript Error:",
-        error?.message ||
-          error
+        "Transcript Endpoint Error:",
+        error?.message || error
       );
 
       return res.status(500).json({
@@ -1695,19 +1598,15 @@ app.post(
         success: false,
 
         error:
-          "Unable to retrieve the YouTube transcript.",
+          "Unable to retrieve transcript.",
 
         details:
           error?.message ||
           "Unknown transcript error.",
-
       });
-
     }
-
   }
 );
-
 // ==========================================================
 // TRANSCRIPT TEST ENDPOINT
 // ==========================================================
@@ -2417,6 +2316,1025 @@ ${transcript}
         details:
           error?.message ||
           "Unknown summary error.",
+
+      });
+
+    }
+
+  }
+);
+// ==========================================================
+// MULTIPLE VIDEO — COMBINED SUMMARY
+// ==========================================================
+//
+// Purpose:
+//
+// Video 1 transcript
+//        +
+// Video 2 transcript
+//        +
+// Video 3 transcript
+//        ...
+//        ↓
+// ONE combined AI summary
+//
+// The AI will:
+// - understand all videos together
+// - merge related topics
+// - remove repeated information
+// - combine complementary information
+// - avoid separate summaries
+// - produce ONE final study summary
+//
+// ==========================================================
+
+app.post(
+  "/api/summarize-multiple-transcripts",
+  async (req, res) => {
+
+    try {
+
+      const {
+
+        // Preferred format:
+        //
+        // videos: [
+        //   {
+        //     videoUrl: "...",
+        //     transcript: "..."
+        //   },
+        //   {
+        //     videoUrl: "...",
+        //     transcript: "..."
+        //   }
+        // ]
+
+        videos = [],
+
+        // Also allow frontend to directly send
+        // transcript objects if already available.
+
+        transcripts = [],
+
+        outputLanguage,
+
+        language =
+          "English",
+
+        summaryType =
+          "detailed",
+
+        aiPrompt =
+          "",
+
+      } = req.body;
+
+      // ------------------------------------------------------
+      // FINAL OUTPUT LANGUAGE
+      // ------------------------------------------------------
+
+      const finalLanguage =
+        outputLanguage ||
+        language ||
+        "English";
+
+      // ------------------------------------------------------
+      // SUMMARY TYPE
+      // ------------------------------------------------------
+
+      const normalizedSummaryType =
+        String(
+          summaryType
+        ).toLowerCase();
+
+      const allowedSummaryTypes = [
+
+        "detailed",
+
+        "bullet",
+
+        "abstract",
+
+      ];
+
+      const selectedSummaryType =
+        allowedSummaryTypes.includes(
+          normalizedSummaryType
+        )
+          ? normalizedSummaryType
+          : "detailed";
+
+      // ------------------------------------------------------
+      // NORMALIZE INPUT
+      // ------------------------------------------------------
+
+      let videoItems = [];
+
+      // ------------------------------------------------------
+      // CASE 1:
+      // FRONTEND SENDS videos[]
+      // ------------------------------------------------------
+
+      if (
+        Array.isArray(videos) &&
+        videos.length > 0
+      ) {
+
+        videoItems =
+          videos.map(
+            (video, index) => ({
+
+              videoNumber:
+                index + 1,
+
+              videoUrl:
+                video?.videoUrl ||
+                video?.url ||
+                "",
+
+              videoId:
+                video?.videoId ||
+                "",
+
+              transcript:
+                video?.transcript ||
+                "",
+
+              title:
+                video?.title ||
+                `Video ${index + 1}`,
+
+            })
+          );
+
+      }
+
+      // ------------------------------------------------------
+      // CASE 2:
+      // FRONTEND SENDS transcripts[]
+      // ------------------------------------------------------
+
+      else if (
+        Array.isArray(
+          transcripts
+        ) &&
+        transcripts.length > 0
+      ) {
+
+        videoItems =
+          transcripts.map(
+            (item, index) => ({
+
+              videoNumber:
+                index + 1,
+
+              videoUrl:
+                item?.videoUrl ||
+                item?.url ||
+                "",
+
+              videoId:
+                item?.videoId ||
+                "",
+
+              transcript:
+                item?.transcript ||
+                item?.text ||
+                String(
+                  item || ""
+                ),
+
+              title:
+                item?.title ||
+                `Video ${index + 1}`,
+
+            })
+          );
+
+      }
+
+      // ------------------------------------------------------
+      // CHECK VIDEO COUNT
+      // ------------------------------------------------------
+
+      if (
+        videoItems.length < 2
+      ) {
+
+        return res.status(400).json({
+
+          success: false,
+
+          error:
+            "At least two videos are required for combined summary.",
+
+        });
+
+      }
+
+      // ------------------------------------------------------
+      // LIMIT
+      // ------------------------------------------------------
+
+      if (
+        videoItems.length > 20
+      ) {
+
+        return res.status(400).json({
+
+          success: false,
+
+          error:
+            "Maximum 20 videos can be processed together.",
+
+        });
+
+      }
+
+      console.log(
+        "========================================"
+      );
+
+      console.log(
+        "MULTIPLE VIDEO COMBINED SUMMARY"
+      );
+
+      console.log(
+        "Number of videos:",
+        videoItems.length
+      );
+
+      console.log(
+        "Output language:",
+        finalLanguage
+      );
+
+      console.log(
+        "Summary type:",
+        selectedSummaryType
+      );
+
+      // ------------------------------------------------------
+      // FETCH MISSING TRANSCRIPTS
+      // ------------------------------------------------------
+
+      for (
+        let i = 0;
+        i < videoItems.length;
+        i++
+      ) {
+
+        const item =
+          videoItems[i];
+
+        // If transcript is already provided,
+        // don't fetch it again.
+
+        if (
+          item.transcript &&
+          String(
+            item.transcript
+          ).trim()
+        ) {
+
+          console.log(
+            `Video ${i + 1}: transcript already provided`
+          );
+
+          continue;
+        }
+
+        // ----------------------------------------------------
+        // GET VIDEO ID
+        // ----------------------------------------------------
+
+        if (
+          !item.videoUrl
+        ) {
+
+          return res.status(400).json({
+
+            success: false,
+
+            error:
+              `Video ${i + 1} does not contain a valid YouTube URL.`,
+
+          });
+
+        }
+
+        const videoId =
+          getYouTubeVideoId(
+            item.videoUrl
+          );
+
+        if (!videoId) {
+
+          return res.status(400).json({
+
+            success: false,
+
+            error:
+              `Invalid YouTube URL for Video ${i + 1}.`,
+
+          });
+
+        }
+
+        item.videoId =
+          videoId;
+
+        // ----------------------------------------------------
+        // FETCH TRANSCRIPT
+        // ----------------------------------------------------
+
+        try {
+
+          console.log(
+            `Fetching transcript for Video ${i + 1}...`
+          );
+
+          const transcriptData =
+            await YoutubeTranscript.fetchTranscript(
+              videoId
+            );
+
+          if (
+            !Array.isArray(
+              transcriptData
+            ) ||
+            transcriptData.length === 0
+          ) {
+
+            return res.status(400).json({
+
+              success: false,
+
+              error:
+                `No transcript found for Video ${i + 1}.`,
+
+            });
+
+          }
+
+          item.transcript =
+            transcriptData
+              .map(
+                (segment) =>
+                  String(
+                    segment?.text ||
+                    ""
+                  ).trim()
+              )
+              .filter(Boolean)
+              .join(" ");
+
+          console.log(
+            `Video ${i + 1} transcript retrieved.`
+          );
+
+        } catch (error) {
+
+          console.error(
+            `Video ${i + 1} transcript error:`,
+            error?.message ||
+              error
+          );
+
+          return res.status(400).json({
+
+            success: false,
+
+            error:
+              `Unable to retrieve transcript for Video ${i + 1}.`,
+
+            details:
+              error?.message ||
+              "Transcript unavailable.",
+
+          });
+
+        }
+
+      }
+
+      // ------------------------------------------------------
+      // CHECK ALL TRANSCRIPTS
+      // ------------------------------------------------------
+
+      const validVideos =
+        videoItems.filter(
+          (item) =>
+            item.transcript &&
+            String(
+              item.transcript
+            ).trim()
+        );
+
+      if (
+        validVideos.length < 2
+      ) {
+
+        return res.status(400).json({
+
+          success: false,
+
+          error:
+            "At least two valid transcripts are required.",
+
+        });
+
+      }
+
+      // ------------------------------------------------------
+      // BUILD COMBINED SOURCE
+      // ------------------------------------------------------
+
+      let combinedTranscript =
+        "";
+
+      validVideos.forEach(
+        (video, index) => {
+
+          combinedTranscript += `
+
+==========================================================
+SOURCE VIDEO ${index + 1}
+==========================================================
+
+Video title:
+${video.title}
+
+Video URL:
+${video.videoUrl || "Not provided"}
+
+Transcript:
+
+${video.transcript}
+
+==========================================================
+END SOURCE VIDEO ${index + 1}
+==========================================================
+
+`;
+
+        }
+      );
+
+      // ------------------------------------------------------
+      // SUMMARY INSTRUCTIONS
+      // ------------------------------------------------------
+
+      let summaryTypeInstructions =
+        "";
+
+      if (
+        selectedSummaryType ===
+        "detailed"
+      ) {
+
+        summaryTypeInstructions = `
+
+Create ONE DETAILED COMBINED STUDY SUMMARY.
+
+The information from all videos must be integrated
+into one coherent study note.
+
+Do NOT create:
+
+Video 1 Summary
+Video 2 Summary
+
+Instead, merge the information according to topics
+and concepts.
+
+If Video 1 explains a concept and Video 2 provides
+additional information about the same concept,
+combine them into the same section.
+
+If both videos repeat the same information,
+mention it only once.
+
+If one video contains information that the other
+does not contain, include that additional information
+in the appropriate topic section.
+
+Organize the final result logically.
+
+`;
+
+      }
+
+      else if (
+        selectedSummaryType ===
+        "bullet"
+      ) {
+
+        summaryTypeInstructions = `
+
+Create ONE COMBINED BULLET STUDY SUMMARY.
+
+Combine the useful information from all videos
+into one revision-oriented note.
+
+Do NOT create separate bullet sections for each video.
+
+Merge related concepts.
+
+Remove repeated information.
+
+Use the Unicode bullet character:
+
+•
+
+Use meaningful plain-text topic headings.
+
+`;
+
+      }
+
+      else {
+
+        summaryTypeInstructions = `
+
+Create ONE COMBINED ABSTRACT.
+
+The abstract must represent the important information
+contained across ALL videos.
+
+Do NOT write separate abstracts.
+
+Combine related information into one coherent
+academic overview.
+
+Remove repetition and unnecessary details.
+
+`;
+
+      }
+
+      // ------------------------------------------------------
+      // AI PROVIDER TRACKER
+      // ------------------------------------------------------
+
+      const providerTracker =
+        [];
+
+      // ------------------------------------------------------
+      // SYSTEM PROMPT
+      // ------------------------------------------------------
+
+      const systemPrompt = `
+
+You are SmartDoc AI,
+an AI-powered learning and study assistant.
+
+You are processing MULTIPLE YouTube videos.
+
+Your task is to create ONE UNIFIED SUMMARY
+from all provided video transcripts.
+
+==========================================================
+MOST IMPORTANT RULE
+==========================================================
+
+DO NOT summarize the videos separately.
+
+The final output must be ONE combined summary.
+
+For example, DO NOT produce:
+
+Video 1 Summary
+...
+
+Video 2 Summary
+...
+
+Instead produce:
+
+Topic A
+...
+
+Topic B
+...
+
+Topic C
+...
+
+Information from all videos must be integrated
+according to the subject matter.
+
+==========================================================
+MERGING RULE
+==========================================================
+
+If two or more videos discuss the same concept:
+
+MERGE their information.
+
+Example:
+
+Video 1:
+Machine Learning is a subset of AI.
+
+Video 2:
+Machine Learning uses algorithms to learn from data.
+
+Final:
+
+Machine Learning
+
+Machine Learning is a subset of AI that uses
+algorithms to learn patterns from data.
+
+Do not repeat the same concept twice.
+
+==========================================================
+COMPLEMENTARY INFORMATION
+==========================================================
+
+If one video contains information that another
+video does not contain:
+
+KEEP IT.
+
+Add it under the appropriate topic.
+
+The final summary should contain the useful
+information from ALL videos.
+
+==========================================================
+DUPLICATE REMOVAL
+==========================================================
+
+Remove:
+
+- repeated explanations
+- repeated definitions
+- repeated examples
+- repeated conclusions
+- unnecessary repetition
+
+But do NOT remove unique information.
+
+==========================================================
+LANGUAGE
+==========================================================
+
+The final output language is:
+
+${finalLanguage}
+
+The source videos may use different languages.
+
+Understand the meaning of the transcripts and
+produce the FINAL SUMMARY entirely in:
+
+${finalLanguage}
+
+==========================================================
+CONTENT FILTERING
+==========================================================
+
+KEEP:
+
+- important concepts
+- definitions
+- technical information
+- facts
+- formulas
+- processes
+- steps
+- examples
+- comparisons
+- conclusions
+- exam-relevant information
+
+REMOVE:
+
+- greetings
+- introductions without useful information
+- casual conversation
+- classroom management
+- personal conversation
+- repeated statements
+- YouTube promotions
+- subscribe requests
+- like/share requests
+- sponsor advertisements
+- unrelated stories
+- filler words
+- unrelated information
+
+==========================================================
+ACCURACY
+==========================================================
+
+Do not invent information.
+
+Do not add information that is not supported
+by the provided transcripts.
+
+Preserve important technical terminology.
+
+Preserve numerical values and formulas.
+
+Do not create unsupported examples.
+
+==========================================================
+FORMATTING
+==========================================================
+
+DO NOT use Markdown.
+
+Do not use:
+
+#
+##
+###
+**
+****
+---
+___
+backticks
+Markdown tables
+
+Use plain-text headings.
+
+For bullet summaries use:
+
+•
+
+Example:
+
+• Point one
+• Point two
+• Point three
+
+==========================================================
+SUMMARY TYPE
+==========================================================
+
+${summaryTypeInstructions}
+
+==========================================================
+USER INSTRUCTIONS
+==========================================================
+
+${
+  aiPrompt
+    ? aiPrompt
+    : "No additional instructions were provided."
+}
+
+==========================================================
+FINAL QUALITY CHECK
+==========================================================
+
+Before returning the answer, silently verify:
+
+1. Is it ONE combined summary?
+
+2. Did I merge related information?
+
+3. Did I remove duplicates?
+
+4. Did I retain unique information from every video?
+
+5. Did I remove greetings and filler?
+
+6. Is everything written in ${finalLanguage}?
+
+7. Did I follow the requested summary type?
+
+8. Did I avoid Markdown?
+
+9. Did I avoid separate Video 1 / Video 2 summaries?
+
+Return ONLY the final combined summary.
+
+`;
+
+      // ------------------------------------------------------
+      // USER PROMPT
+      // ------------------------------------------------------
+
+      const userPrompt = `
+
+Create ONE combined study summary from the
+following ${validVideos.length} YouTube videos.
+
+Final output language:
+
+${finalLanguage}
+
+Summary type:
+
+${selectedSummaryType}
+
+IMPORTANT:
+
+The videos must NOT be summarized separately.
+
+Merge related concepts.
+
+Remove repeated information.
+
+Keep unique information from every video.
+
+Create one coherent final study document.
+
+Here are the source transcripts:
+
+${combinedTranscript}
+
+`;
+
+      // ------------------------------------------------------
+      // AI REQUEST
+      // ------------------------------------------------------
+
+      const rawSummary =
+        await askAI(
+
+          [
+
+            {
+              role:
+                "system",
+
+              content:
+                systemPrompt,
+
+            },
+
+            {
+              role:
+                "user",
+
+              content:
+                userPrompt,
+
+            },
+
+          ],
+
+          {
+
+            maxCompletionTokens:
+              12000,
+
+            providerTracker,
+
+          }
+
+        );
+
+      // ------------------------------------------------------
+      // CLEAN RESULT
+      // ------------------------------------------------------
+
+      const summary =
+        cleanSummaryOutput(
+          rawSummary,
+          selectedSummaryType
+        );
+
+      // ------------------------------------------------------
+      // FINAL VALIDATION
+      // ------------------------------------------------------
+
+      if (
+        !summary ||
+        !summary.trim()
+      ) {
+
+        return res.status(500).json({
+
+          success: false,
+
+          error:
+            "AI returned an empty combined summary.",
+
+        });
+
+      }
+
+      // ------------------------------------------------------
+      // LOGGING
+      // ------------------------------------------------------
+
+      console.log(
+        "========================================"
+      );
+
+      console.log(
+        "Combined summary generated successfully."
+      );
+
+      console.log(
+        "Videos processed:",
+        validVideos.length
+      );
+
+      console.log(
+        "Summary length:",
+        summary.length
+      );
+
+      console.log(
+        "Generated by:",
+        providerTracker[
+          providerTracker.length - 1
+        ] ||
+          "SmartDoc AI"
+      );
+
+      console.log(
+        "========================================"
+      );
+
+      // ------------------------------------------------------
+      // RESPONSE
+      // ------------------------------------------------------
+
+      return res.json({
+
+        success: true,
+
+        summary,
+
+        language:
+          finalLanguage,
+
+        outputLanguage:
+          finalLanguage,
+
+        summaryType:
+          selectedSummaryType,
+
+        videoCount:
+          validVideos.length,
+
+        videos:
+          validVideos.map(
+            (video, index) => ({
+
+              videoNumber:
+                index + 1,
+
+              videoId:
+                video.videoId ||
+                null,
+
+              videoUrl:
+                video.videoUrl ||
+                null,
+
+              title:
+                video.title ||
+                `Video ${index + 1}`,
+
+            })
+          ),
+
+        generatedBy:
+          providerTracker[
+            providerTracker.length - 1
+          ] ||
+          "SmartDoc AI",
+
+        providersUsed: [
+
+          ...new Set(
+            providerTracker
+          ),
+
+        ],
+
+        status:
+          "completed",
+
+      });
+
+    } catch (error) {
+
+      console.error(
+        "Multiple Video Summary Error:",
+        error?.message ||
+          error
+      );
+
+      return res.status(500).json({
+
+        success: false,
+
+        error:
+          "Unable to generate combined multiple-video summary.",
+
+        details:
+          error?.message ||
+          "Unknown multiple-video summary error.",
 
       });
 

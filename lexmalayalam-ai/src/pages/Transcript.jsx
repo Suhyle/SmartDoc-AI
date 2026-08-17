@@ -1,7 +1,8 @@
 import React, {
   useState,
   useRef,
-  useMemo
+  useMemo,
+  useEffect
 } from 'react'
 
 import jsPDF from 'jspdf'
@@ -288,38 +289,14 @@ export default function Transcript() {
   // MULTIPLE VIDEOS
   // ==========================================
 
-  const [multipleVideos, setMultipleVideos] =
-    useState([
-      {
-        id: 1,
-        url:
-          'https://youtube.com/watch?v=abc123',
-        title:
-          'Introduction to Artificial Intelligence – Full Course',
-        duration:
-          '2:35:42'
-      },
+ const [multipleVideos, setMultipleVideos] = useState([])
+const [batchResults, setBatchResults] = useState([])
+const [isBatchProcessing, setIsBatchProcessing] = useState(false)
 
-      {
-        id: 2,
-        url:
-          'https://youtube.com/watch?v=def456',
-        title:
-          'Kerala PSC Current Affairs 2024 – Complete',
-        duration:
-          '1:12:30'
-      },
-
-      {
-        id: 3,
-        url:
-          'https://youtube.com/watch?v=ghi789',
-        title:
-          'DBMS Full Course – Gate Smashers',
-        duration:
-          '3:10:15'
-      }
-    ])
+  // Combined summary for multiple videos
+  const [combinedSummary, setCombinedSummary] = useState('')
+  const [combinedSummaryStatus, setCombinedSummaryStatus] = useState('idle')
+  const [combinedSummaryError, setCombinedSummaryError] = useState('')
 
   const [batchUrlInput, setBatchUrlInput] =
     useState('')
@@ -379,6 +356,120 @@ export default function Transcript() {
     setMultipleVideos([])
 
   }
+  const handleBatchTranscript = async () => {
+  if (multipleVideos.length === 0) {
+    alert('Please add at least one YouTube video.')
+    return
+  }
+
+  setIsBatchProcessing(true)
+  setApiError('')
+  setBatchResults([])
+  setCombinedSummary('')
+  setCombinedSummaryStatus('idle')
+  setCombinedSummaryError('')
+
+  const results = []
+
+  for (let i = 0; i < multipleVideos.length; i++) {
+    const video = multipleVideos[i]
+
+    try {
+      console.log(`Processing video ${i + 1}:`, video.url)
+
+      const response = await fetch(
+        `${API_BASE_URL}/api/transcript`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            videoUrl: video.url.trim(),
+
+            language:
+              language === 'malayalam'
+                ? 'Malayalam'
+                : 'English',
+
+            transcriptMode,
+            startTime,
+            endTime,
+            durationLimit,
+            durationUnit,
+            additionalOptions
+          })
+        }
+      )
+
+      const data = await response.json().catch(() => ({}))
+
+      if (!response.ok || !data.success) {
+        throw new Error(
+          data.message ||
+          data.error ||
+          data.details ||
+          'Unable to get transcript.'
+        )
+      }
+
+      const receivedTranscript =
+        data.transcript || ''
+
+      if (!receivedTranscript.trim()) {
+        throw new Error(
+          'Transcript was not returned by the backend.'
+        )
+      }
+
+      results.push({
+        id: video.id,
+        url: video.url,
+        title:
+          data.title ||
+          data.videoDetails?.title ||
+          data.video?.title ||
+          video.title,
+
+        duration:
+          getVideoDurationFromResponse(data) ||
+          video.duration,
+
+        transcript: receivedTranscript,
+        transcriptData: data,
+        status: 'completed'
+      })
+
+    } catch (error) {
+      console.error(
+        `Batch transcript error for video ${i + 1}:`,
+        error
+      )
+
+      results.push({
+        id: video.id,
+        url: video.url,
+        title: video.title,
+        duration: video.duration,
+        transcript: '',
+        transcriptData: null,
+        status: 'error',
+        error:
+          error.message ||
+          'Unable to get transcript.'
+      })
+    }
+
+    setBatchResults([...results])
+  }
+
+  setIsBatchProcessing(false)
+
+  console.log(
+    'Batch transcript processing completed:',
+    results
+  )
+}
 
   // ==========================================
   // DISPLAY LANGUAGE HELPER
@@ -750,6 +841,114 @@ export default function Transcript() {
     useState('')
 
   const AI_PROMPT_MAX = 500
+
+  // ==========================================
+  // PERSIST TRANSCRIPT / SUMMARY PAGE STATE
+  // Keeps generated data when navigating to another
+  // page and then returning to Transcript & Summary.
+  // ==========================================
+
+  const TRANSCRIPT_STATE_KEY = 'smartdoc_transcript_page_state_v1'
+
+  const [isStateRestored, setIsStateRestored] =
+    useState(false)
+
+  useEffect(() => {
+    try {
+      const saved = sessionStorage.getItem(TRANSCRIPT_STATE_KEY)
+
+      if (saved) {
+        const state = JSON.parse(saved)
+
+        if (state.activeMode) setActiveMode(state.activeMode)
+        if (typeof state.youtubeUrl === 'string') setYoutubeUrl(state.youtubeUrl)
+        if (Array.isArray(state.recentLinks)) setRecentLinks(state.recentLinks)
+        if (state.transcriptMode) setTranscriptMode(state.transcriptMode)
+        if (typeof state.startTime === 'string') setStartTime(state.startTime)
+        if (typeof state.endTime === 'string') setEndTime(state.endTime)
+        if (typeof state.durationLimit === 'number') setDurationLimit(state.durationLimit)
+        if (state.durationUnit) setDurationUnit(state.durationUnit)
+        if (state.additionalOptions) setAdditionalOptions(state.additionalOptions)
+        if (state.language) setLanguage(state.language)
+        if (typeof state.transcript === 'string') setTranscript(state.transcript)
+        if (state.transcriptData !== undefined) setTranscriptData(state.transcriptData)
+        if (typeof state.videoDuration === 'string') setVideoDuration(state.videoDuration)
+        if (typeof state.summary === 'string') setSummary(state.summary)
+        if (Array.isArray(state.multipleVideos)) setMultipleVideos(state.multipleVideos)
+        if (Array.isArray(state.batchResults)) setBatchResults(state.batchResults)
+        if (typeof state.combinedSummary === 'string') setCombinedSummary(state.combinedSummary)
+        if (state.combinedSummaryStatus) setCombinedSummaryStatus(state.combinedSummaryStatus)
+        if (typeof state.combinedSummaryError === 'string') setCombinedSummaryError(state.combinedSummaryError)
+        if (typeof state.batchUrlInput === 'string') setBatchUrlInput(state.batchUrlInput)
+        if (state.summaryType) setSummaryType(state.summaryType)
+        if (typeof state.aiPrompt === 'string') setAiPrompt(state.aiPrompt)
+      }
+    } catch (error) {
+      console.error('Unable to restore Transcript page state:', error)
+    } finally {
+      setIsStateRestored(true)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!isStateRestored) return
+
+    try {
+      sessionStorage.setItem(
+        TRANSCRIPT_STATE_KEY,
+        JSON.stringify({
+          activeMode,
+          youtubeUrl,
+          recentLinks,
+          transcriptMode,
+          startTime,
+          endTime,
+          durationLimit,
+          durationUnit,
+          additionalOptions,
+          language,
+          transcript,
+          transcriptData,
+          videoDuration,
+          summary,
+          multipleVideos,
+          batchResults,
+          combinedSummary,
+          combinedSummaryStatus,
+          combinedSummaryError,
+          batchUrlInput,
+          summaryType,
+          aiPrompt
+        })
+      )
+    } catch (error) {
+      console.error('Unable to save Transcript page state:', error)
+    }
+  }, [
+    isStateRestored,
+    activeMode,
+    youtubeUrl,
+    recentLinks,
+    transcriptMode,
+    startTime,
+    endTime,
+    durationLimit,
+    durationUnit,
+    additionalOptions,
+    language,
+    transcript,
+    transcriptData,
+    videoDuration,
+    summary,
+    multipleVideos,
+    batchResults,
+    combinedSummary,
+    combinedSummaryStatus,
+    combinedSummaryError,
+    batchUrlInput,
+    summaryType,
+    aiPrompt
+  ])
 
   // ==========================================
   // UPDATE PROCESSING STATUS
@@ -1150,6 +1349,726 @@ export default function Transcript() {
       }
 
     }
+
+  // ==========================================
+  // BATCH SUMMARY GENERATION
+  // ==========================================
+
+  const handleBatchSummaryGeneration = async () => {
+
+    if (batchResults.length === 0) {
+      alert('Please process the videos and get transcripts first.')
+      return
+    }
+
+    const completedVideos = batchResults.filter(
+      (item) =>
+        item.status === 'completed' &&
+        item.transcript?.trim()
+    )
+
+    if (completedVideos.length === 0) {
+      alert('No completed transcripts are available for summarization.')
+      return
+    }
+
+    setIsBatchProcessing(true)
+    setApiError('')
+
+    const updatedResults = [...batchResults]
+
+    for (let i = 0; i < updatedResults.length; i++) {
+
+      const result = updatedResults[i]
+
+      if (
+        result.status !== 'completed' ||
+        !result.transcript?.trim()
+      ) {
+        continue
+      }
+
+      try {
+
+        console.log(
+          `Generating summary for video ${i + 1}:`,
+          result.title
+        )
+
+        updatedResults[i] = {
+          ...updatedResults[i],
+          summaryStatus: 'processing',
+          summaryError: ''
+        }
+
+        setBatchResults([...updatedResults])
+
+        const outputLanguage =
+          language === 'malayalam'
+            ? 'Malayalam'
+            : 'English'
+
+        const sourceLanguage =
+          result.transcriptData?.sourceLanguage ||
+          result.transcriptData?.language ||
+          result.transcriptData?.languageCode ||
+          'unknown'
+
+        const response = await fetch(
+          `${API_BASE_URL}/api/summarize-transcript`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              transcript: result.transcript,
+              language: sourceLanguage,
+              outputLanguage: outputLanguage,
+              summaryType: summaryType,
+              aiPrompt: aiPrompt.trim()
+            })
+          }
+        )
+
+        const data =
+          await response.json().catch(() => ({}))
+
+        if (!response.ok || !data.success) {
+          throw new Error(
+            data.message ||
+            data.error ||
+            data.details ||
+            'Unable to generate summary.'
+          )
+        }
+
+        const generatedSummary =
+          data.summary || ''
+
+        if (!generatedSummary.trim()) {
+          throw new Error(
+            'Summary was not returned by the backend.'
+          )
+        }
+
+        updatedResults[i] = {
+          ...updatedResults[i],
+          summary: generatedSummary,
+          summaryStatus: 'completed',
+          summaryError: ''
+        }
+
+        setBatchResults([...updatedResults])
+
+      } catch (error) {
+
+        console.error(
+          `Batch summary error for video ${i + 1}:`,
+          error
+        )
+
+        updatedResults[i] = {
+          ...updatedResults[i],
+          summaryStatus: 'error',
+          summaryError:
+            error.message ||
+            'Unable to generate summary.'
+        }
+
+        setBatchResults([...updatedResults])
+      }
+    }
+
+    setIsBatchProcessing(false)
+
+    console.log(
+      'Batch summary generation completed:',
+      updatedResults
+    )
+  }
+
+
+  // ==========================================
+  // COMBINED SUMMARY GENERATION
+  // ==========================================
+
+  const handleCombinedSummaryGeneration = async () => {
+
+    if (batchResults.length === 0) {
+      alert('Please process the videos and get transcripts first.')
+      return
+    }
+
+    const completedVideos = batchResults.filter(
+      (item) =>
+        item.status === 'completed' &&
+        item.transcript?.trim()
+    )
+
+    if (completedVideos.length < 2) {
+      alert('Please have at least two completed video transcripts for a combined summary.')
+      return
+    }
+
+    setIsBatchProcessing(true)
+    setApiError('')
+    setCombinedSummary('')
+    setCombinedSummaryStatus('processing')
+    setCombinedSummaryError('')
+
+    try {
+
+      const outputLanguage =
+        language === 'malayalam'
+          ? 'Malayalam'
+          : 'English'
+
+      const sourceLanguage =
+        completedVideos
+          .map(
+            (item) =>
+              item.transcriptData?.sourceLanguage ||
+              item.transcriptData?.language ||
+              item.transcriptData?.languageCode ||
+              'unknown'
+          )
+          .find(Boolean) || 'unknown'
+
+      const response = await fetch(
+        `${API_BASE_URL}/api/summarize-multiple-transcripts`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            videos: completedVideos.map(
+              (item, index) => ({
+                videoNumber: index + 1,
+                title: item.title || `Video ${index + 1}`,
+                transcript: item.transcript
+              })
+            ),
+            language: sourceLanguage,
+            outputLanguage,
+            summaryType,
+            aiPrompt: aiPrompt.trim()
+          })
+        }
+      )
+
+      const data =
+        await response.json().catch(() => ({}))
+
+      if (!response.ok || !data.success) {
+        throw new Error(
+          data.message ||
+          data.error ||
+          data.details ||
+          'Unable to generate combined summary.'
+        )
+      }
+
+      const generatedSummary =
+        data.summary || ''
+
+      if (!generatedSummary.trim()) {
+        throw new Error(
+          'Combined summary was not returned by the backend.'
+        )
+      }
+
+      setCombinedSummary(generatedSummary)
+      setCombinedSummaryStatus('completed')
+
+    } catch (error) {
+
+      console.error(
+        'Combined batch summary error:',
+        error
+      )
+
+      setCombinedSummaryStatus('error')
+
+      setCombinedSummaryError(
+        error.message ||
+        'Unable to generate combined summary.'
+      )
+
+      setApiError(
+        error.message ||
+        'Something went wrong while generating the combined summary.'
+      )
+
+    } finally {
+
+      setIsBatchProcessing(false)
+
+    }
+  }
+
+
+  // ==========================================
+  // BATCH PDF GENERATION
+  // ==========================================
+
+  const handleBatchPdfGeneration = async (
+    result,
+    index
+  ) => {
+
+    if (!result?.summary?.trim()) {
+      alert('Please generate the video summary first.')
+      return
+    }
+
+    try {
+
+      const doc = new jsPDF()
+      const PAGE_WIDTH = doc.internal.pageSize.getWidth()
+      const PAGE_HEIGHT = doc.internal.pageSize.getHeight()
+      const MARGIN = 18
+      const usableWidth = PAGE_WIDTH - (MARGIN * 2)
+      const CONTENT_BOTTOM = PAGE_HEIGHT - 22
+      const LINE_HEIGHT = 6
+
+      const isMalayalam = language === 'malayalam'
+      const bodyFontFamily = isMalayalam
+        ? 'NotoSansMalayalam'
+        : 'helvetica'
+
+      const safeSetFont = (family, style = 'normal') => {
+        try {
+          doc.setFont(family, style)
+        } catch (e) {
+          doc.setFont('helvetica', style)
+        }
+      }
+
+      let cursorY = MARGIN
+
+      const ensureSpace = (needed = LINE_HEIGHT) => {
+        if (cursorY + needed > CONTENT_BOTTOM) {
+          doc.addPage()
+          cursorY = MARGIN
+        }
+      }
+
+      safeSetFont('helvetica', 'bold')
+      doc.setFontSize(19)
+      doc.setTextColor(103, 71, 233)
+      doc.text('SmartDoc AI', MARGIN, cursorY)
+      cursorY += 8
+
+      safeSetFont('helvetica', 'normal')
+      doc.setFontSize(13)
+      doc.setTextColor(30, 30, 50)
+      doc.text('AI Generated Study Summary', MARGIN, cursorY)
+      cursorY += 6
+
+      doc.setDrawColor(224, 220, 240)
+      doc.line(MARGIN, cursorY, PAGE_WIDTH - MARGIN, cursorY)
+      cursorY += 8
+
+      doc.setFontSize(9.5)
+      doc.setTextColor(80, 80, 95)
+
+      const title = result.title || `Video ${index + 1}`
+
+      const titleLines = doc.splitTextToSize(
+        `Video: ${title}`,
+        usableWidth
+      )
+
+      doc.text(titleLines, MARGIN, cursorY)
+      cursorY += titleLines.length * 4.6
+
+      const urlLines = doc.splitTextToSize(
+        `Source: ${result.url || ''}`,
+        usableWidth
+      )
+
+      doc.text(urlLines, MARGIN, cursorY)
+      cursorY += urlLines.length * 4.6
+
+      doc.text(
+        `Generated: ${new Date().toLocaleString()}`,
+        MARGIN,
+        cursorY
+      )
+      cursorY += 4.6
+
+      doc.text(
+        `Output Language: ${isMalayalam ? 'Malayalam' : 'English'}`,
+        MARGIN,
+        cursorY
+      )
+      cursorY += 4.6
+
+      const summaryTypeLabel =
+        summaryTypes.find((item) => item.id === summaryType)?.title ||
+        summaryType
+
+      doc.text(
+        `Summary Type: ${summaryTypeLabel}`,
+        MARGIN,
+        cursorY
+      )
+      cursorY += 8
+
+      doc.setDrawColor(224, 220, 240)
+      doc.line(MARGIN, cursorY, PAGE_WIDTH - MARGIN, cursorY)
+      cursorY += 8
+
+      result.summary.trim().split('\n').forEach((rawLine) => {
+
+        const line = rawLine.trim()
+
+        if (!line) {
+          cursorY += LINE_HEIGHT * 0.55
+          return
+        }
+
+        const isHeading = /^#{1,3}\s+/.test(line)
+        const isBullet = /^[-*]\s+/.test(line)
+        const isNumbered = /^\d+\.\s+/.test(line)
+
+        const cleanLine = line
+          .replace(/^#{1,3}\s+/, '')
+          .replace(/^[-*]\s+/, '')
+          .replace(/^\d+\.\s+/, '')
+
+        if (isHeading) {
+          safeSetFont(bodyFontFamily, 'normal')
+          doc.setFontSize(
+            line.startsWith('###')
+              ? 11.5
+              : line.startsWith('##')
+                ? 13
+                : 15
+          )
+        } else {
+          safeSetFont(bodyFontFamily, 'normal')
+          doc.setFontSize(10.5)
+        }
+
+        let prefix = ''
+
+        if (isBullet) {
+          prefix = '• '
+        } else if (isNumbered) {
+          prefix = `${line.match(/^(\d+)\./)[1]}. `
+        }
+
+        const wrapped = doc.splitTextToSize(
+          `${prefix}${cleanLine}`,
+          usableWidth
+        )
+
+        wrapped.forEach((wrappedLine) => {
+          ensureSpace(LINE_HEIGHT)
+          doc.text(wrappedLine, MARGIN, cursorY)
+          cursorY += LINE_HEIGHT
+        })
+
+        cursorY += 1
+      })
+
+      const pageCount = doc.internal.getNumberOfPages()
+
+      for (let page = 1; page <= pageCount; page++) {
+
+        doc.setPage(page)
+
+        doc.setDrawColor(230, 230, 240)
+        doc.line(
+          MARGIN,
+          PAGE_HEIGHT - 16,
+          PAGE_WIDTH - MARGIN,
+          PAGE_HEIGHT - 16
+        )
+
+        doc.setFontSize(8)
+        doc.setTextColor(140, 140, 155)
+        safeSetFont('helvetica', 'normal')
+
+        doc.text(
+          'Generated by SmartDoc AI',
+          MARGIN,
+          PAGE_HEIGHT - 10
+        )
+
+        doc.text(
+          `Page ${page} of ${pageCount}`,
+          PAGE_WIDTH - MARGIN,
+          PAGE_HEIGHT - 10,
+          { align: 'right' }
+        )
+      }
+
+      const pdfBlob = doc.output('blob')
+
+      await savePDF({
+        blob: pdfBlob,
+        title: `${title} - ${summaryTypeLabel}`,
+        category: 'Other',
+        sourceUrl: result.url || '',
+        summaryType: summaryTypeLabel,
+        language: isMalayalam ? 'Malayalam' : 'English'
+      })
+
+      doc.save(
+        `SmartDoc_AI_Video_${index + 1}_Summary.pdf`
+      )
+
+      alert('PDF saved to Downloads successfully.')
+
+    } catch (error) {
+
+      console.error(
+        'Batch PDF generation error:',
+        error
+      )
+
+      alert(
+        error.message ||
+        'Unable to generate PDF.'
+      )
+    }
+  }
+
+
+  // ==========================================
+  // COMBINED PDF GENERATION
+  // ==========================================
+
+  const handleCombinedPdfGeneration = async () => {
+
+    if (!combinedSummary.trim()) {
+      alert('Please generate the combined summary first.')
+      return
+    }
+
+    try {
+
+      const doc = new jsPDF()
+      const PAGE_WIDTH = doc.internal.pageSize.getWidth()
+      const PAGE_HEIGHT = doc.internal.pageSize.getHeight()
+      const MARGIN = 18
+      const usableWidth = PAGE_WIDTH - (MARGIN * 2)
+      const CONTENT_BOTTOM = PAGE_HEIGHT - 22
+      const LINE_HEIGHT = 6
+
+      const isMalayalam = language === 'malayalam'
+      const bodyFontFamily = isMalayalam
+        ? 'NotoSansMalayalam'
+        : 'helvetica'
+
+      const safeSetFont = (family, style = 'normal') => {
+        try {
+          doc.setFont(family, style)
+        } catch (e) {
+          doc.setFont('helvetica', style)
+        }
+      }
+
+      let cursorY = MARGIN
+
+      const ensureSpace = (needed = LINE_HEIGHT) => {
+        if (cursorY + needed > CONTENT_BOTTOM) {
+          doc.addPage()
+          cursorY = MARGIN
+        }
+      }
+
+      safeSetFont('helvetica', 'bold')
+      doc.setFontSize(19)
+      doc.setTextColor(103, 71, 233)
+      doc.text('SmartDoc AI', MARGIN, cursorY)
+      cursorY += 8
+
+      safeSetFont('helvetica', 'normal')
+      doc.setFontSize(13)
+      doc.setTextColor(30, 30, 50)
+      doc.text(
+        'AI Generated Combined Study Summary',
+        MARGIN,
+        cursorY
+      )
+      cursorY += 6
+
+      doc.setDrawColor(224, 220, 240)
+      doc.line(MARGIN, cursorY, PAGE_WIDTH - MARGIN, cursorY)
+      cursorY += 8
+
+      doc.setFontSize(9.5)
+      doc.setTextColor(80, 80, 95)
+
+      const completedVideos = batchResults.filter(
+        (item) =>
+          item.status === 'completed' &&
+          item.transcript?.trim()
+      )
+
+      doc.text(
+        `Videos combined: ${completedVideos.length}`,
+        MARGIN,
+        cursorY
+      )
+      cursorY += 4.6
+
+      doc.text(
+        `Generated: ${new Date().toLocaleString()}`,
+        MARGIN,
+        cursorY
+      )
+      cursorY += 4.6
+
+      doc.text(
+        `Output Language: ${isMalayalam ? 'Malayalam' : 'English'}`,
+        MARGIN,
+        cursorY
+      )
+      cursorY += 4.6
+
+      const summaryTypeLabel =
+        summaryTypes.find((item) => item.id === summaryType)?.title ||
+        summaryType
+
+      doc.text(
+        `Summary Type: ${summaryTypeLabel}`,
+        MARGIN,
+        cursorY
+      )
+      cursorY += 8
+
+      doc.setDrawColor(224, 220, 240)
+      doc.line(MARGIN, cursorY, PAGE_WIDTH - MARGIN, cursorY)
+      cursorY += 8
+
+      combinedSummary.trim().split('\n').forEach((rawLine) => {
+
+        const line = rawLine.trim()
+
+        if (!line) {
+          cursorY += LINE_HEIGHT * 0.55
+          return
+        }
+
+        const isHeading = /^#{1,3}\s+/.test(line)
+        const isBullet = /^[-*]\s+/.test(line)
+        const isNumbered = /^\d+\.\s+/.test(line)
+
+        const cleanLine = line
+          .replace(/^#{1,3}\s+/, '')
+          .replace(/^[-*]\s+/, '')
+          .replace(/^\d+\.\s+/, '')
+
+        if (isHeading) {
+          safeSetFont(bodyFontFamily, 'normal')
+          doc.setFontSize(
+            line.startsWith('###')
+              ? 11.5
+              : line.startsWith('##')
+                ? 13
+                : 15
+          )
+        } else {
+          safeSetFont(bodyFontFamily, 'normal')
+          doc.setFontSize(10.5)
+        }
+
+        let prefix = ''
+
+        if (isBullet) {
+          prefix = '• '
+        } else if (isNumbered) {
+          prefix = `${line.match(/^(\d+)\./)[1]}. `
+        }
+
+        const wrapped = doc.splitTextToSize(
+          `${prefix}${cleanLine}`,
+          usableWidth
+        )
+
+        wrapped.forEach((wrappedLine) => {
+          ensureSpace(LINE_HEIGHT)
+          doc.text(wrappedLine, MARGIN, cursorY)
+          cursorY += LINE_HEIGHT
+        })
+
+        cursorY += 1
+      })
+
+      const pageCount = doc.internal.getNumberOfPages()
+
+      for (let page = 1; page <= pageCount; page++) {
+
+        doc.setPage(page)
+
+        doc.setDrawColor(230, 230, 240)
+        doc.line(
+          MARGIN,
+          PAGE_HEIGHT - 16,
+          PAGE_WIDTH - MARGIN,
+          PAGE_HEIGHT - 16
+        )
+
+        doc.setFontSize(8)
+        doc.setTextColor(140, 140, 155)
+        safeSetFont('helvetica', 'normal')
+
+        doc.text(
+          'Generated by SmartDoc AI',
+          MARGIN,
+          PAGE_HEIGHT - 10
+        )
+
+        doc.text(
+          `Page ${page} of ${pageCount}`,
+          PAGE_WIDTH - MARGIN,
+          PAGE_HEIGHT - 10,
+          { align: 'right' }
+        )
+      }
+
+      const pdfBlob = doc.output('blob')
+
+      await savePDF({
+        blob: pdfBlob,
+        title: `Combined Summary - ${completedVideos.length} Videos`,
+        category: 'Other',
+        sourceUrl: completedVideos
+          .map((item) => item.url)
+          .filter(Boolean)
+          .join(', '),
+        summaryType: `${summaryTypeLabel} - Combined`,
+        language: isMalayalam ? 'Malayalam' : 'English'
+      })
+
+      doc.save(
+        'SmartDoc_AI_Combined_Summary.pdf'
+      )
+
+      alert(
+        'Combined PDF saved to Downloads successfully.'
+      )
+
+    } catch (error) {
+
+      console.error(
+        'Combined PDF generation error:',
+        error
+      )
+
+      alert(
+        error.message ||
+        'Unable to generate combined PDF.'
+      )
+    }
+  }
+
 
   // ==========================================
   // PDF GENERATION (professional, Markdown-aware,
@@ -2038,7 +2957,7 @@ doc.save('SmartDoc_AI_Summary.pdf')
 
               <div>
                 <h2>Multiple Videos (Batch Processing)</h2>
-                <p>Process and summarize multiple videos together</p>
+                <p>Process videos and generate a separate summary for each video</p>
               </div>
 
             </div>
@@ -2101,6 +3020,14 @@ doc.save('SmartDoc_AI_Summary.pdf')
                     <FiPlus size={14} />
                     Add more videos
                   </button>
+                  <button
+                      className="tr-get-transcript-btn"
+                            onClick={handleBatchTranscript}
+                          disabled={multipleVideos.length === 0 || isBatchProcessing}>
+  {isBatchProcessing
+    ? 'Processing Videos...'
+    : 'Process Videos'}
+</button>
 
                   <button className="tr-clear-all-btn" onClick={handleClearAllVideos}>
                     <FiTrash2 size={13} />
@@ -2116,9 +3043,478 @@ doc.save('SmartDoc_AI_Summary.pdf')
           </section>
 
         )}
+        {/* BATCH TRANSCRIPT RESULTS */}
+
+{batchResults.length > 0 && (
+  <section className="tr-card">
+
+    <div className="tr-section-heading">
+      <FiFileText size={18} className="tr-purple" />
+
+      <div>
+        <h2>Video Results</h2>
+        <p>
+          Separate transcript and summary for each video — no mixed summary
+        </p>
+      </div>
+    </div>
+
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
+
+      {batchResults.map((result, index) => (
+
+        <div
+          key={result.id}
+          style={{
+            border: '1px solid #e5e7eb',
+            borderRadius: '14px',
+            padding: '18px',
+            background: '#ffffff'
+          }}
+        >
+
+          {/* VIDEO HEADER */}
+
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: '12px',
+              marginBottom: '14px'
+            }}
+          >
+
+            <div>
+              <h3 style={{ margin: 0 }}>
+                Video {index + 1}
+              </h3>
+
+              <p
+                style={{
+                  margin: '5px 0 0',
+                  fontSize: '13px',
+                  color: '#6b7280',
+                  wordBreak: 'break-all'
+                }}
+              >
+                {result.url}
+              </p>
+            </div>
+
+            <span
+              style={{
+                padding: '6px 12px',
+                borderRadius: '20px',
+                fontSize: '12px',
+                fontWeight: 600,
+                background:
+                  result.status === 'completed'
+                    ? '#dcfce7'
+                    : '#fee2e2',
+                color:
+                  result.status === 'completed'
+                    ? '#166534'
+                    : '#991b1b'
+              }}
+            >
+              {result.status === 'completed'
+                ? '✓ Completed'
+                : '✕ Failed'}
+            </span>
+
+          </div>
 
 
-        {/* 6. PROCESSING STATUS */}
+          {/* ERROR */}
+
+          {result.status === 'error' && (
+            <div
+              style={{
+                padding: '12px',
+                borderRadius: '10px',
+                background: '#fef2f2',
+                color: '#991b1b',
+                marginBottom: '12px'
+              }}
+            >
+              {result.error || 'Unable to retrieve transcript.'}
+            </div>
+          )}
+
+
+          {/* TRANSCRIPT */}
+
+          {result.status === 'completed' && result.transcript && (
+            <div>
+
+              <h4 style={{ marginBottom: '8px' }}>
+                Transcript
+              </h4>
+
+              <div
+                style={{
+                  whiteSpace: 'pre-wrap',
+                  lineHeight: 1.7,
+                  maxHeight: '350px',
+                  overflowY: 'auto',
+                  padding: '16px',
+                  borderRadius: '10px',
+                  background: '#fafaff',
+                  border: '1px solid #e5e7eb'
+                }}
+              >
+                {result.transcript}
+              </div>
+
+            </div>
+          )}
+
+          {/* BATCH SUMMARY */}
+
+          {result.summaryStatus === 'processing' && (
+            <div
+              style={{
+                marginTop: '16px',
+                padding: '14px',
+                borderRadius: '10px',
+                background: '#f5f3ff',
+                color: '#6d28d9'
+              }}
+            >
+              Generating AI summary...
+            </div>
+          )}
+
+          {result.summaryStatus === 'error' && (
+            <div
+              style={{
+                marginTop: '16px',
+                padding: '14px',
+                borderRadius: '10px',
+                background: '#fef2f2',
+                color: '#991b1b'
+              }}
+            >
+              {result.summaryError || 'Unable to generate summary.'}
+            </div>
+          )}
+
+          {result.summaryStatus === 'completed' && result.summary && (
+            <div
+              style={{
+                marginTop: '18px',
+                padding: '18px',
+                borderRadius: '12px',
+                background: 'rgba(124, 58, 237, 0.06)',
+                border: '1px solid rgba(124, 58, 237, 0.18)'
+              }}
+            >
+
+              <div className="tr-section-heading">
+                <FiFileText size={18} className="tr-purple" />
+                <div>
+                  <h3 style={{ margin: 0 }}>AI Summary</h3>
+                  <p style={{ margin: '4px 0 0' }}>
+                    {summaryType} summary •{' '}
+                    {language === 'malayalam' ? 'Malayalam' : 'English'}
+                  </p>
+                </div>
+              </div>
+
+              <div
+                style={{
+                  whiteSpace: 'pre-wrap',
+                  lineHeight: 1.7,
+                  marginTop: '12px'
+                }}
+              >
+                {result.summary}
+              </div>
+
+              <div
+                style={{
+                  marginTop: '18px',
+                  display: 'flex',
+                  justifyContent: 'flex-end'
+                }}
+              >
+                <button
+                  className="tr-get-transcript-btn"
+                  onClick={() =>
+                    handleBatchPdfGeneration(
+                      result,
+                      index
+                    )
+                  }
+                >
+                  Generate PDF
+                </button>
+              </div>
+
+            </div>
+          )}
+
+        </div>
+
+      ))}
+
+    </div>
+
+  </section>
+)}
+
+        {/* COMBINED SUMMARY RESULT */}
+
+        {activeMode === 'multiple' &&
+          batchResults.length > 0 &&
+          combinedSummaryStatus === 'processing' && (
+
+            <section
+              className="tr-card"
+              style={{
+                marginTop: '20px',
+                background: '#f5f3ff',
+                border: '1px solid rgba(124, 58, 237, 0.20)'
+              }}
+            >
+              <div className="tr-section-heading">
+                <FiFileText
+                  size={18}
+                  className="tr-purple"
+                />
+                <div>
+                  <h2>Combined AI Summary</h2>
+                  <p>
+                    Generating one unified summary from all completed videos...
+                  </p>
+                </div>
+              </div>
+            </section>
+
+          )}
+
+        {activeMode === 'multiple' &&
+          batchResults.length > 0 &&
+          combinedSummaryStatus === 'error' && (
+
+            <section
+              className="tr-card"
+              style={{
+                marginTop: '20px',
+                border: '1px solid #fca5a5',
+                background: '#fff7f7'
+              }}
+            >
+              <h3 style={{ color: '#dc2626' }}>
+                Combined Summary Error
+              </h3>
+
+              <p style={{ marginBottom: 0 }}>
+                {combinedSummaryError ||
+                  'Unable to generate combined summary.'}
+              </p>
+            </section>
+
+          )}
+
+        {activeMode === 'multiple' &&
+          batchResults.length > 0 &&
+          combinedSummaryStatus === 'completed' &&
+          combinedSummary && (
+
+            <section
+              className="tr-card"
+              style={{
+                marginTop: '20px',
+                background: 'rgba(124, 58, 237, 0.06)',
+                border: '1px solid rgba(124, 58, 237, 0.18)'
+              }}
+            >
+
+              <div className="tr-section-heading">
+                <FiFileText
+                  size={18}
+                  className="tr-purple"
+                />
+
+                <div>
+                  <h2>Combined AI Summary</h2>
+                  <p>
+                    {summaryType} summary •{' '}
+                    {language === 'malayalam'
+                      ? 'Malayalam'
+                      : 'English'} •{' '}
+                    {
+                      batchResults.filter(
+                        (item) =>
+                          item.status === 'completed' &&
+                          item.transcript?.trim()
+                      ).length
+                    } videos combined
+                  </p>
+                </div>
+              </div>
+
+              <div
+                style={{
+                  whiteSpace: 'pre-wrap',
+                  lineHeight: 1.7,
+                  marginTop: '12px'
+                }}
+              >
+                {combinedSummary}
+              </div>
+
+              <div
+                style={{
+                  marginTop: '20px',
+                  display: 'flex',
+                  justifyContent: 'flex-end'
+                }}
+              >
+                <button
+                  className="tr-get-transcript-btn"
+                  onClick={handleCombinedPdfGeneration}
+                >
+                  Generate Combined PDF
+                </button>
+              </div>
+
+            </section>
+
+          )}
+
+
+        {/* 7. MULTIPLE VIDEO SUMMARY SETTINGS */}
+
+        {activeMode === 'multiple' && batchResults.length > 0 && (
+
+          <section className="tr-card">
+
+            <div className="tr-section-heading">
+              <FiFileText size={18} className="tr-purple" />
+              <div>
+                <h2>Summary Settings</h2>
+                <p>Generate separate summaries or one combined summary from all videos</p>
+              </div>
+            </div>
+
+            <div className="tr-summary-grid">
+              {summaryTypes.map((type) => (
+                <div
+                  key={type.id}
+                  className={`tr-summary-card ${summaryType === type.id ? 'selected' : ''} accent-${type.accent}`}
+                  onClick={() => setSummaryType(type.id)}
+                >
+                  <div className="tr-summary-card-top">
+                    <div className="tr-summary-icon">{type.icon}</div>
+                    {summaryType === type.id && (
+                      <div className="tr-summary-selected-dot" />
+                    )}
+                  </div>
+                  <h3>{type.title}</h3>
+                  <p>{type.description}</p>
+                  <span className="tr-summary-badge">{type.badge}</span>
+                </div>
+              ))}
+            </div>
+
+            <div className="tr-ai-prompt-box">
+              <div className="tr-ai-prompt-label">
+                <FiFileText size={14} />
+                <span>AI Prompt (Optional)</span>
+              </div>
+              <p className="tr-ai-prompt-sub">
+                Add specific instructions for each video's summary.
+              </p>
+              <textarea
+                className="tr-ai-prompt-textarea"
+                placeholder="E.g., Focus on important concepts, ignore examples, explain for beginners..."
+                maxLength={AI_PROMPT_MAX}
+                value={aiPrompt}
+                onChange={(e) => setAiPrompt(e.target.value)}
+              />
+              <div className="tr-ai-prompt-counter">
+                {aiPrompt.length} / {AI_PROMPT_MAX}
+              </div>
+            </div>
+
+            <div
+              style={{
+                marginTop: '20px',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                gap: '12px',
+                flexWrap: 'wrap'
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <FiGlobe size={15} className="tr-purple" />
+                <span style={{ fontSize: '14px', fontWeight: 600 }}>Output Language</span>
+                <select
+                  value={language}
+                  onChange={(e) => setLanguage(e.target.value)}
+                  style={{
+                    padding: '8px 12px',
+                    borderRadius: '8px',
+                    border: '1px solid #d1d5db',
+                    background: '#fff'
+                  }}
+                >
+                  <option value="english">English</option>
+                  <option value="malayalam">Malayalam</option>
+                </select>
+              </div>
+
+              <div
+                style={{
+                  display: 'flex',
+                  gap: '10px',
+                  flexWrap: 'wrap',
+                  justifyContent: 'flex-end'
+                }}
+              >
+                <button
+                  className="tr-get-transcript-btn"
+                  onClick={handleBatchSummaryGeneration}
+                  disabled={isBatchProcessing}
+                >
+                  {isBatchProcessing
+                    ? 'Generating Summaries...'
+                    : 'Generate Summary for Each Video'}
+                </button>
+
+                <button
+                  className="tr-get-transcript-btn"
+                  onClick={handleCombinedSummaryGeneration}
+                  disabled={
+                    isBatchProcessing ||
+                    batchResults.filter(
+                      (item) =>
+                        item.status === 'completed' &&
+                        item.transcript?.trim()
+                    ).length < 2
+                  }
+                  style={{
+                    background:
+                      'linear-gradient(135deg, #7c3aed, #6d28d9)'
+                  }}
+                >
+                  {isBatchProcessing
+                    ? 'Generating...'
+                    : 'Generate Combined Summary'}
+                </button>
+              </div>
+            </div>
+
+          </section>
+
+        )}
+
+
+        {/* 8. PROCESSING STATUS */}
 
         {isProcessing && (
 
@@ -2241,7 +3637,9 @@ doc.save('SmartDoc_AI_Summary.pdf')
 
         {/* 7. SUMMARIZATION OPTIONS */}
 
-        <section className="tr-card">
+        {activeMode === 'single' && (
+
+          <section className="tr-card">
 
           <div className="tr-section-heading">
 
@@ -2306,15 +3704,24 @@ doc.save('SmartDoc_AI_Summary.pdf')
           </div>
 
 
-          <div style={{ marginTop: '20px', display: 'flex', justifyContent: 'flex-end' }}>
+          <div
+            style={{
+              marginTop: '20px',
+              display: 'flex',
+              justifyContent: 'flex-end',
+              gap: '10px',
+              flexWrap: 'wrap'
+            }}
+          >
 
             <button
               className="tr-get-transcript-btn"
               onClick={handleSummaryGeneration}
-              disabled={!transcript || isSummaryLoading}
+              disabled={!transcript || isSummaryLoading || activeMode === 'multiple'}
             >
               {isSummaryLoading ? 'Generating Summary...' : 'Generate Summary'}
             </button>
+
 
           </div>
 
@@ -2363,6 +3770,8 @@ doc.save('SmartDoc_AI_Summary.pdf')
           )}
 
         </section>
+
+        )}
 
       </div>
 

@@ -1,0 +1,511 @@
+
+
+
+/* =========================================================
+   1. PROFILE-SPECIFIC VARIABLES
+========================================================= */
+
+:root {
+  --sd-profile-blue: #2563eb;
+  --sd-profile-blue-light: #dbeafe;
+  --sd-profile-blue-dark: #1d4ed8;
+}
+
+
+/* =========================================================
+   2. PAGE BASE
+========================================================= */
+
+.sd-profile-page {
+  min-height: 100vh;
+  width: 100%;
+  background: #ffffff;
+  color: var(--sd-text-dark, #1e293b);
+  box-sizing: border-box;
+  padding-bottom: 110px;
+}
+
+.sd-profile-page *,
+.sd-profile-page *::before,
+.sd-profile-page *::after {
+  box-sizing: border-box;
+}
+
+.sd-profile-container {
+  width: min(560px, calc(100% - 32px));
+  margin: 0 auto;
+  padding-top: 14px;
+}
+
+.sd-profile-page button {
+  font-family: inherit;
+}
+
+
+/* =========================================================
+   3. HEADER
+========================================================= */
+
+.sd-profile-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 52px;
+  margin-bottom: 18px;
+}
+
+.sd-profile-header-title {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: var(--sd-text-dark, #1e293b);
+  letter-spacing: -0.3px;
+}
+
+.sd-profile-icon-btn {
+  width: 38px;
+  height: 38px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--sd-text-dark, #1e293b);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.sd-profile-icon-btn:hover {
+  background: #f1f5f9;
+}
+
+.sd-profile-more-wrapper {
+  position: relative;
+}
+
+.sd-profile-more-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 899;
+}
+
+.sd-profile-more-menu {
+  position: absolute;
+  top: 44px;
+  right: 0;
+  z-index: 900;
+  width: 170px;
+  background: #ffffff;
+  border: 1px solid var(--sd-border, #e2e8f0);
+  border-radius: var(--sd-radius-md, 12px);
+  box-shadow: var(--sd-shadow-md, 0 8px 24px rgba(15,23,42,0.08));
+  padding: 6px;
+}
+
+.sd-profile-more-menu button {
+  width: 100%;
+  text-align: left;
+  border: 0;
+  background: transparent;
+  padding: 9px 10px;
+  border-radius: 8px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--sd-text-dark, #1e293b);
+  cursor: pointer;
+}
+
+.sd-profile-more-menu button:hover {
+  background: #f8fafc;
+}
+
+
+/* =========================================================
+   4. USER IDENTITY
+========================================================= */
+
+.sd-profile-identity {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 4px;
+  margin-bottom: 22px;
+}
+
+.sd-profile-avatar {
+  width: 92px;
+  height: 92px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--sd-profile-blue), var(--sd-profile-blue-dark));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 12px;
+  box-shadow: 0 10px 24px rgba(37, 99, 235, 0.25);
+}
+
+.sd-profile-avatar span {
+  color: #ffffff;
+  font-size: 2.2rem;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.sd-profile-name {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: var(--sd-text-dark, #1e293b);
+}
+
+.sd-profile-email {
+  margin: 2px 0 0;
+  font-size: 0.82rem;
+  color: var(--sd-text-muted, #64748b);
+  font-weight: 500;
+}
+
+
+/* =========================================================
+   5. FEEDBACK CARD
+========================================================= */
+
+.sd-profile-feedback-card {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  margin-bottom: 24px;
+  background: var(--sd-profile-blue-light);
+  border: 1px solid rgba(37, 99, 235, 0.15);
+  border-radius: var(--sd-radius-lg, 18px);
+  cursor: pointer;
+  text-align: left;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.sd-profile-feedback-card:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--sd-shadow-sm, 0 2px 8px rgba(15,23,42,0.05));
+}
+
+.sd-profile-feedback-icon {
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  border-radius: 11px;
+  background: #ffffff;
+  color: var(--sd-profile-blue);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.sd-profile-feedback-text {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.sd-profile-feedback-title {
+  font-size: 0.9rem;
+  font-weight: 800;
+  color: var(--sd-text-dark, #1e293b);
+}
+
+.sd-profile-feedback-subtitle {
+  font-size: 0.75rem;
+  color: var(--sd-text-muted, #64748b);
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.sd-profile-feedback-arrow {
+  color: var(--sd-profile-blue);
+  flex-shrink: 0;
+}
+
+
+/* =========================================================
+   6. SECTIONS
+========================================================= */
+
+.sd-profile-section {
+  margin-bottom: 20px;
+}
+
+.sd-profile-section-title {
+  margin: 0 0 8px 4px;
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.6px;
+  color: var(--sd-text-muted, #64748b);
+  text-transform: uppercase;
+}
+
+.sd-profile-section-card {
+  background: #ffffff;
+  border: 1px solid var(--sd-border, #e2e8f0);
+  border-radius: var(--sd-radius-lg, 18px);
+  box-shadow: var(--sd-shadow-sm, 0 2px 8px rgba(15,23,42,0.05));
+  overflow: hidden;
+}
+
+
+/* =========================================================
+   7. MENU ITEM
+========================================================= */
+
+.sd-profile-menu-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 13px 14px;
+  border: 0;
+  border-bottom: 1px solid var(--sd-border, #e2e8f0);
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.2s ease;
+}
+
+.sd-profile-menu-item.no-border {
+  border-bottom: 0;
+}
+
+.sd-profile-menu-item:hover {
+  background: #f8fafc;
+}
+
+.sd-profile-menu-icon {
+  width: 38px;
+  height: 38px;
+  flex-shrink: 0;
+  border-radius: 10px;
+  background: var(--sd-profile-blue-light);
+  color: var(--sd-profile-blue);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.sd-profile-menu-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.sd-profile-menu-title {
+  font-size: 0.86rem;
+  font-weight: 750;
+  color: var(--sd-text-dark, #1e293b);
+}
+
+.sd-profile-menu-subtitle {
+  font-size: 0.72rem;
+  color: var(--sd-text-muted, #64748b);
+  font-weight: 500;
+}
+
+.sd-profile-menu-arrow {
+  color: var(--sd-text-muted, #64748b);
+  flex-shrink: 0;
+}
+
+
+/* =========================================================
+   8. LOGOUT
+========================================================= */
+
+.sd-profile-logout-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 13px;
+  margin-top: 4px;
+  margin-bottom: 14px;
+  border: 1px solid var(--sd-red-light, #fee2e2);
+  border-radius: var(--sd-radius-lg, 18px);
+  background: var(--sd-red-light, #fee2e2);
+  color: var(--sd-red, #ef4444);
+  font-size: 0.86rem;
+  font-weight: 800;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.sd-profile-logout-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--sd-shadow-sm, 0 2px 8px rgba(15,23,42,0.05));
+}
+
+
+/* =========================================================
+   9. VERSION FOOTER
+========================================================= */
+
+.sd-profile-version {
+  text-align: center;
+  font-size: 0.72rem;
+  color: var(--sd-text-muted, #64748b);
+  font-weight: 500;
+  margin: 0 0 16px;
+}
+
+
+/* =========================================================
+   10. BOTTOM NAVIGATION
+   Duplicated from Home.css so /profile renders correctly
+   even when Home.css hasn't been loaded in this session.
+   Keep these rules identical to Home.css if you edit either.
+========================================================= */
+
+.sd-bottom-nav {
+  position: fixed;
+  z-index: 800;
+  left: 50%;
+  bottom: 15px;
+  transform: translateX(-50%);
+  width: min(650px, calc(100% - 30px));
+  height: 68px;
+  padding: 6px 12px;
+  background: rgba(255, 255, 255, 0.96);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--sd-border, #e2e8f0);
+  border-radius: 20px;
+  box-shadow: 0 12px 35px rgba(15, 23, 42, 0.13);
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  align-items: center;
+}
+
+.sd-nav-item {
+  height: 100%;
+  border: 0;
+  background: transparent;
+  color: var(--sd-text-muted, #64748b);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  cursor: pointer;
+  border-radius: 12px;
+}
+
+.sd-nav-item:hover {
+  background: #f8fafc;
+  color: var(--sd-primary, #6366f1);
+}
+
+.sd-nav-item.active {
+  color: var(--sd-primary, #6366f1);
+}
+
+.sd-nav-icon {
+  flex-shrink: 0;
+}
+
+.sd-nav-label {
+  font-size: 0.56rem;
+  font-weight: 750;
+}
+
+.sd-central-plus-wrapper {
+  height: 100%;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.sd-central-plus-btn {
+  width: 48px;
+  height: 48px;
+  margin-top: -25px;
+  border: 4px solid #f8fafc;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--sd-primary, #6366f1), var(--sd-primary-dark, #4f46e5));
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 8px 20px rgba(79, 70, 229, 0.28);
+  transition: transform 0.2s ease;
+}
+
+.sd-central-plus-btn:hover {
+  transform: translateY(-2px) scale(1.03);
+}
+
+.sd-plus-label {
+  margin-top: 2px;
+}
+
+
+/* =========================================================
+   11. TABLET / MOBILE
+========================================================= */
+
+@media (max-width: 640px) {
+
+  .sd-profile-container {
+    width: calc(100% - 24px);
+    padding-top: 10px;
+  }
+
+  .sd-profile-page {
+    padding-bottom: 100px;
+  }
+
+  .sd-profile-avatar {
+    width: 82px;
+    height: 82px;
+  }
+
+  .sd-profile-avatar span {
+    font-size: 1.9rem;
+  }
+
+  .sd-profile-name {
+    font-size: 1.05rem;
+  }
+
+  .sd-bottom-nav {
+    width: calc(100% - 20px);
+    bottom: 8px;
+  }
+}
+
+@media (max-width: 400px) {
+
+  .sd-profile-avatar {
+    width: 76px;
+    height: 76px;
+  }
+
+  .sd-profile-avatar span {
+    font-size: 1.7rem;
+  }
+
+  .sd-nav-label {
+    font-size: 0.5rem;
+  }
+
+  .sd-central-plus-btn {
+    width: 44px;
+    height: 44px;
+  }
+}
