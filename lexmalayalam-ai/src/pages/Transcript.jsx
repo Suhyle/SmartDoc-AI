@@ -870,15 +870,8 @@ const [isBatchProcessing, setIsBatchProcessing] = useState(false)
         if (state.durationUnit) setDurationUnit(state.durationUnit)
         if (state.additionalOptions) setAdditionalOptions(state.additionalOptions)
         if (state.language) setLanguage(state.language)
-        if (typeof state.transcript === 'string') setTranscript(state.transcript)
-        if (state.transcriptData !== undefined) setTranscriptData(state.transcriptData)
-        if (typeof state.videoDuration === 'string') setVideoDuration(state.videoDuration)
-        if (typeof state.summary === 'string') setSummary(state.summary)
-        if (Array.isArray(state.multipleVideos)) setMultipleVideos(state.multipleVideos)
-        if (Array.isArray(state.batchResults)) setBatchResults(state.batchResults)
-        if (typeof state.combinedSummary === 'string') setCombinedSummary(state.combinedSummary)
-        if (state.combinedSummaryStatus) setCombinedSummaryStatus(state.combinedSummaryStatus)
-        if (typeof state.combinedSummaryError === 'string') setCombinedSummaryError(state.combinedSummaryError)
+        // Generated transcript/summary results intentionally start empty on a fresh page load.
+        // This prevents an old transcript from appearing before the user provides a video.
         if (typeof state.batchUrlInput === 'string') setBatchUrlInput(state.batchUrlInput)
         if (state.summaryType) setSummaryType(state.summaryType)
         if (typeof state.aiPrompt === 'string') setAiPrompt(state.aiPrompt)
@@ -3400,15 +3393,15 @@ doc.save('SmartDoc_AI_Summary.pdf')
               </div>
             </div>
 
-            <div className="tr-summary-grid">
+            <div className="tr-summary-types">
               {summaryTypes.map((type) => (
                 <div
                   key={type.id}
-                  className={`tr-summary-card ${summaryType === type.id ? 'selected' : ''} accent-${type.accent}`}
+                  className={`tr-summary-type-card ${summaryType === type.id ? 'active' : ''} accent-${type.accent}`}
                   onClick={() => setSummaryType(type.id)}
                 >
-                  <div className="tr-summary-card-top">
-                    <div className="tr-summary-icon">{type.icon}</div>
+                  <div className="tr-summary-type-card-top">
+                    <div className="tr-summary-type-icon">{type.icon}</div>
                     {summaryType === type.id && (
                       <div className="tr-summary-selected-dot" />
                     )}
@@ -3598,7 +3591,7 @@ doc.save('SmartDoc_AI_Summary.pdf')
 
         {/* TRANSCRIPT RESULT */}
 
-        {transcript && (
+        {transcript && youtubeUrl.trim() && (
 
           <section className="tr-card">
 
@@ -3652,18 +3645,18 @@ doc.save('SmartDoc_AI_Summary.pdf')
 
           </div>
 
-          <div className="tr-summary-grid">
+          <div className="tr-summary-types">
 
             {summaryTypes.map((type) => (
 
               <div
                 key={type.id}
-                className={`tr-summary-card ${summaryType === type.id ? 'selected' : ''} accent-${type.accent}`}
+                className={`tr-summary-type-card ${summaryType === type.id ? 'active' : ''} accent-${type.accent}`}
                 onClick={() => setSummaryType(type.id)}
               >
 
-                <div className="tr-summary-card-top">
-                  <div className="tr-summary-icon">{type.icon}</div>
+                <div className="tr-summary-type-card-top">
+                  <div className="tr-summary-type-icon">{type.icon}</div>
                   {summaryType === type.id && (<div className="tr-summary-selected-dot" />)}
                 </div>
 
@@ -3776,40 +3769,72 @@ doc.save('SmartDoc_AI_Summary.pdf')
       </div>
 
 
-      {/* BOTTOM NAVIGATION */}
+      {/* =========================================================
+          BOTTOM NAVIGATION
+          Same structure and styling as the Home page
+         ========================================================= */}
 
-      <nav className="sd-bottom-nav">
+      <nav className="sd-bottom-nav" aria-label="Main navigation">
 
-        <button className="sd-nav-item" onClick={() => navigate('/home')}>
+        {/* HOME */}
+        <button
+          type="button"
+          className="sd-nav-item"
+          onClick={() => navigate('/home')}
+          aria-label="Home"
+        >
           <FiHome size={20} className="sd-nav-icon" />
           <span className="sd-nav-label">Home</span>
         </button>
 
-        <button className="sd-nav-item active" onClick={() => navigate('/documents')}>
+        {/* TRANSCRIPTS — ACTIVE ON THIS PAGE */}
+        <button
+          type="button"
+          className="sd-nav-item active"
+          onClick={() => {
+            if (window.location.pathname !== '/transcript-summary') {
+              navigate('/transcript-summary')
+            } else {
+              window.scrollTo({ top: 0, behavior: 'smooth' })
+            }
+          }}
+          aria-label="Transcripts"
+        >
           <FiFileText size={20} className="sd-nav-icon" />
           <span className="sd-nav-label">Transcripts</span>
         </button>
 
+        {/* ADD / NEW — same central button as Home */}
         <div className="sd-central-plus-wrapper">
-
           <button
+            type="button"
             className="sd-central-plus-btn"
             aria-label="Add / New"
             onClick={() => navigate('/home')}
           >
             <FiPlus size={24} />
           </button>
-
           <span className="sd-nav-label sd-plus-label">Add / New</span>
-
         </div>
 
-        <button className="sd-nav-item" onClick={() => navigate('/downloads')}>
+        {/* DOWNLOADS */}
+        <button
+          type="button"
+          className="sd-nav-item"
+          onClick={() => navigate('/downloads')}
+          aria-label="Downloads"
+        >
           <FiDownload size={20} className="sd-nav-icon" />
           <span className="sd-nav-label">Downloads</span>
         </button>
 
-        <button className="sd-nav-item" onClick={() => navigate('/profile')}>
+        {/* PROFILE */}
+        <button
+          type="button"
+          className="sd-nav-item"
+          onClick={() => navigate('/profile')}
+          aria-label="Profile"
+        >
           <FiUser size={20} className="sd-nav-icon" />
           <span className="sd-nav-label">Profile</span>
         </button>
