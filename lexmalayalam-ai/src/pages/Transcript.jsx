@@ -35,7 +35,9 @@ import {
   FiUser,
   FiList,
   FiAlignLeft,
-  FiFileMinus
+  FiFileMinus,
+  FiCopy,
+  FiRefreshCw
 } from 'react-icons/fi'
 
 import { savePDF } from '../services/pdfStorage'
@@ -273,6 +275,19 @@ export default function Transcript() {
     useState(false)
 
   const [apiError, setApiError] =
+    useState('')
+
+  // ==========================================
+  // COPY / DOWNLOAD / PDF STATUS FEEDBACK STATE
+  // Shared across Single Video and Multiple Video
+  // sections so every action button gets consistent
+  // "copied" / "generating" feedback.
+  // ==========================================
+
+  const [copiedKey, setCopiedKey] =
+    useState('')
+
+  const [pdfGeneratingKey, setPdfGeneratingKey] =
     useState('')
 
   // ==========================================
@@ -738,6 +753,140 @@ const [isBatchProcessing, setIsBatchProcessing] = useState(false)
     }
 
   // ==========================================
+  // COPY TO CLIPBOARD HELPER
+  // Works for transcript / summary / combined
+  // summary text anywhere in the page. `key` is a
+  // unique identifier used to show a temporary
+  // "Copied" state on the button that triggered it.
+  // ==========================================
+
+  const handleCopyToClipboard =
+    async (text, key) => {
+
+      if (!text || !text.trim()) return
+
+      try {
+
+        if (
+          navigator.clipboard &&
+          navigator.clipboard.writeText
+        ) {
+
+          await navigator.clipboard.writeText(text)
+
+        } else {
+
+          // Fallback for browsers/contexts without
+          // the async Clipboard API available.
+          const textarea =
+            document.createElement('textarea')
+
+          textarea.value = text
+          textarea.style.position = 'fixed'
+          textarea.style.opacity = '0'
+
+          document.body.appendChild(textarea)
+          textarea.focus()
+          textarea.select()
+
+          document.execCommand('copy')
+
+          document.body.removeChild(textarea)
+
+        }
+
+        setCopiedKey(key)
+
+        setTimeout(() => {
+          setCopiedKey((prev) =>
+            prev === key ? '' : prev
+          )
+        }, 2000)
+
+      } catch (error) {
+
+        console.error(
+          'Copy to clipboard failed:',
+          error
+        )
+
+        alert('Unable to copy to clipboard.')
+
+      }
+
+    }
+
+  // ==========================================
+  // DOWNLOAD PLAIN TEXT FILE HELPER
+  // Used for "download transcript" / "download
+  // summary" buttons, separate from the PDF export.
+  // ==========================================
+
+  const handleDownloadText =
+    (text, filename) => {
+
+      if (!text || !text.trim()) return
+
+      try {
+
+        const blob = new Blob(
+          [text],
+          { type: 'text/plain;charset=utf-8' }
+        )
+
+        const url = URL.createObjectURL(blob)
+
+        const link = document.createElement('a')
+        link.href = url
+        link.download = filename
+
+        document.body.appendChild(link)
+        link.click()
+        document.body.removeChild(link)
+
+        URL.revokeObjectURL(url)
+
+      } catch (error) {
+
+        console.error(
+          'Download text failed:',
+          error
+        )
+
+        alert('Unable to download the file.')
+
+      }
+
+    }
+
+  // ==========================================
+  // TEXT STATS HELPER (word / character count)
+  // Used to show quick transcript/summary stats
+  // without redesigning the existing cards.
+  // ==========================================
+
+  const getTextStats =
+    (text) => {
+
+      if (!text || !text.trim()) {
+        return { words: 0, chars: 0 }
+      }
+
+      const trimmed = text.trim()
+
+      const words =
+        trimmed
+          .split(/\s+/)
+          .filter(Boolean).length
+
+      return {
+        words,
+        chars: trimmed.length
+      }
+
+    }
+
+  // ==========================================
   // PROCESSING STATUS
   // ==========================================
 
@@ -797,38 +946,36 @@ const [isBatchProcessing, setIsBatchProcessing] = useState(false)
   // ==========================================
 
   const summaryTypes = [
+  {
+    id: 'detailed',
+    title: 'Detailed Summary',
+    description:
+      'An in-depth explanation with important details, concepts, and context.',
+    badge: 'Best for depth',
+    icon: <FiAlignLeft size={20} />,
+    accent: 'purple'
+  },
 
-    {
-      id: 'detailed',
-      title: 'Detailed Summary',
-      description:
-        'Comprehensive summary with key points, explanations and important details.',
-      badge: 'Best for in-depth understanding',
-      icon: <FiAlignLeft size={20} />,
-      accent: 'purple'
-    },
+  {
+    id: 'bullet',
+    title: 'Bullet Summary',
+    description:
+      'Concise, easy-to-scan bullet points highlighting key ideas and takeaways.',
+    badge: 'Best for review',
+    icon: <FiList size={20} />,
+    accent: 'green'
+  },
 
-    {
-      id: 'bullet',
-      title: 'Bullet Summary',
-      description:
-        'Concise summary in bullet points covering main ideas and key takeaways.',
-      badge: 'Best for quick review',
-      icon: <FiList size={20} />,
-      accent: 'green'
-    },
-
-    {
-      id: 'abstract',
-      title: 'Abstract Summary',
-      description:
-        'Short abstract capturing the core essence and context of the content.',
-      badge: 'Best for overview',
-      icon: <FiFileMinus size={20} />,
-      accent: 'amber'
-    }
-
-  ]
+  {
+    id: 'abstract',
+    title: 'Abstract Summary',
+    description:
+      'A brief, high-level overview capturing the core essence and context.',
+    badge: 'Best for clarity',
+    icon: <FiFileMinus size={20} />,
+    accent: 'amber'
+  }
+]
 
   const [summaryType, setSummaryType] =
     useState('detailed')
@@ -1230,6 +1377,8 @@ const [isBatchProcessing, setIsBatchProcessing] = useState(false)
 
       }
 
+      if (isSummaryLoading) return
+
       setIsSummaryLoading(true)
 
       setApiError('')
@@ -1353,6 +1502,8 @@ const [isBatchProcessing, setIsBatchProcessing] = useState(false)
       alert('Please process the videos and get transcripts first.')
       return
     }
+
+    if (isBatchProcessing) return
 
     const completedVideos = batchResults.filter(
       (item) =>
@@ -1493,6 +1644,8 @@ const [isBatchProcessing, setIsBatchProcessing] = useState(false)
       return
     }
 
+    if (isBatchProcessing) return
+
     const completedVideos = batchResults.filter(
       (item) =>
         item.status === 'completed' &&
@@ -1615,6 +1768,12 @@ const [isBatchProcessing, setIsBatchProcessing] = useState(false)
       alert('Please generate the video summary first.')
       return
     }
+
+    const pdfKey = `batch-${result.id}`
+
+    if (pdfGeneratingKey === pdfKey) return
+
+    setPdfGeneratingKey(pdfKey)
 
     try {
 
@@ -1828,6 +1987,12 @@ const [isBatchProcessing, setIsBatchProcessing] = useState(false)
         error.message ||
         'Unable to generate PDF.'
       )
+    } finally {
+
+      setPdfGeneratingKey((prev) =>
+        prev === pdfKey ? '' : prev
+      )
+
     }
   }
 
@@ -1842,6 +2007,10 @@ const [isBatchProcessing, setIsBatchProcessing] = useState(false)
       alert('Please generate the combined summary first.')
       return
     }
+
+    if (pdfGeneratingKey === 'combined') return
+
+    setPdfGeneratingKey('combined')
 
     try {
 
@@ -2059,6 +2228,12 @@ const [isBatchProcessing, setIsBatchProcessing] = useState(false)
         error.message ||
         'Unable to generate combined PDF.'
       )
+    } finally {
+
+      setPdfGeneratingKey((prev) =>
+        prev === 'combined' ? '' : prev
+      )
+
     }
   }
 
@@ -2078,6 +2253,10 @@ const [isBatchProcessing, setIsBatchProcessing] = useState(false)
       return
 
       }
+
+      if (pdfGeneratingKey === 'single') return
+
+      setPdfGeneratingKey('single')
 
       try {
 
@@ -2394,6 +2573,12 @@ doc.save('SmartDoc_AI_Summary.pdf')
           'Unable to generate PDF. Please try again.'
         )
 
+      } finally {
+
+        setPdfGeneratingKey((prev) =>
+          prev === 'single' ? '' : prev
+        )
+
       }
 
     }
@@ -2643,7 +2828,7 @@ doc.save('SmartDoc_AI_Summary.pdf')
 
         {/* TRANSCRIPT SUCCESS MESSAGE */}
 
-        {transcript && (
+        {activeMode === 'single' && transcript && (
 
           <section
             className="tr-card"
@@ -3036,9 +3221,136 @@ doc.save('SmartDoc_AI_Summary.pdf')
           </section>
 
         )}
+        {/* MULTIPLE VIDEO TRANSCRIPT SUCCESS DETAILS */}
+
+        {activeMode === 'multiple' &&
+          batchResults.some(
+            (result) =>
+              result.status === 'completed' &&
+              result.transcript?.trim()
+          ) && (
+            <section className="tr-card">
+
+              <div className="tr-section-heading">
+                <FiFileText size={18} className="tr-purple" />
+                <div>
+                  <h2>Transcript Retrieval Details</h2>
+                  <p>
+                    Successfully retrieved transcripts from the processed videos
+                  </p>
+                </div>
+              </div>
+
+              <div
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '12px'
+                }}
+              >
+                {batchResults.map((result, index) => {
+                  if (
+                    result.status !== 'completed' ||
+                    !result.transcript?.trim()
+                  ) {
+                    return null
+                  }
+
+                  const sourceLanguage =
+                    result.transcriptData?.sourceLanguage ||
+                    result.transcriptData?.language ||
+                    result.transcriptData?.languageCode
+
+                  return (
+                    <div
+                      key={`success-${result.id}`}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'flex-start',
+                        gap: '12px',
+                        padding: '14px',
+                        border: '1px solid rgba(34, 197, 94, 0.30)',
+                        borderRadius: '12px',
+                        background: 'rgba(240, 253, 244, 0.95)'
+                      }}
+                    >
+                      <div
+                        style={{
+                          width: '34px',
+                          height: '34px',
+                          minWidth: '34px',
+                          borderRadius: '50%',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          background: '#dcfce7',
+                          color: '#16a34a'
+                        }}
+                      >
+                        <FiCheck size={18} />
+                      </div>
+
+                      <div>
+                        <h3
+                          style={{
+                            margin: '0 0 7px',
+                            color: '#166534',
+                            fontSize: '16px'
+                          }}
+                        >
+                          Video {index + 1}: {result.title || `Video ${index + 1}`}
+                        </h3>
+
+                        <p
+                          style={{
+                            margin: 0,
+                            color: '#365314',
+                            fontSize: '13px'
+                          }}
+                        >
+                          <strong>Transcript retrieved successfully</strong>
+                        </p>
+
+                        <div
+                          style={{
+                            display: 'flex',
+                            flexWrap: 'wrap',
+                            gap: '6px 20px',
+                            marginTop: '6px',
+                            color: '#365314',
+                            fontSize: '13px'
+                          }}
+                        >
+                          <span>
+                            <strong>Source language:</strong>{' '}
+                            {getDisplayLanguage(sourceLanguage)}
+                          </span>
+
+                          {result.duration && (
+                            <span
+                              style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '5px'
+                              }}
+                            >
+                              <FiClock size={13} />
+                              <strong>Video length:</strong> {result.duration}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+
+            </section>
+          )}
+
         {/* BATCH TRANSCRIPT RESULTS */}
 
-{batchResults.length > 0 && (
+{activeMode === 'multiple' && batchResults.length > 0 && (
   <section className="tr-card">
 
     <div className="tr-section-heading">
@@ -3160,6 +3472,49 @@ doc.save('SmartDoc_AI_Summary.pdf')
                 {result.transcript}
               </div>
 
+              <div
+                style={{
+                  marginTop: '10px',
+                  display: 'flex',
+                  flexWrap: 'wrap',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: '8px'
+                }}
+              >
+
+                <span className="tr-text-stats">
+                  {(() => {
+                    const stats = getTextStats(result.transcript)
+                    return `${stats.words} words • ${stats.chars} characters`
+                  })()}
+                </span>
+
+                <div style={{ display: 'flex', gap: '8px' }}>
+
+                  <button
+                    className={`tr-download-btn ${copiedKey === `batch-transcript-${result.id}` ? 'tr-copied-state' : ''}`}
+                    onClick={() => handleCopyToClipboard(result.transcript, `batch-transcript-${result.id}`)}
+                  >
+                    {copiedKey === `batch-transcript-${result.id}` ? <FiCheck size={13} /> : <FiCopy size={13} />}
+                    {copiedKey === `batch-transcript-${result.id}` ? 'Copied' : 'Copy'}
+                  </button>
+
+                  <button
+                    className="tr-download-btn"
+                    onClick={() => handleDownloadText(
+                      result.transcript,
+                      `SmartDoc_AI_Transcript_${index + 1}.txt`
+                    )}
+                  >
+                    <FiDownload size={13} />
+                    Download
+                  </button>
+
+                </div>
+
+              </div>
+
             </div>
           )}
 
@@ -3227,11 +3582,46 @@ doc.save('SmartDoc_AI_Summary.pdf')
 
               <div
                 style={{
-                  marginTop: '18px',
-                  display: 'flex',
-                  justifyContent: 'flex-end'
+                  marginTop: '12px'
                 }}
               >
+                <span className="tr-text-stats">
+                  {(() => {
+                    const stats = getTextStats(result.summary)
+                    return `${stats.words} words • ${stats.chars} characters`
+                  })()}
+                </span>
+              </div>
+
+              <div
+                style={{
+                  marginTop: '18px',
+                  display: 'flex',
+                  justifyContent: 'flex-end',
+                  gap: '8px',
+                  flexWrap: 'wrap'
+                }}
+              >
+
+                <button
+                  className={`tr-download-btn ${copiedKey === `batch-summary-${result.id}` ? 'tr-copied-state' : ''}`}
+                  onClick={() => handleCopyToClipboard(result.summary, `batch-summary-${result.id}`)}
+                >
+                  {copiedKey === `batch-summary-${result.id}` ? <FiCheck size={13} /> : <FiCopy size={13} />}
+                  {copiedKey === `batch-summary-${result.id}` ? 'Copied' : 'Copy'}
+                </button>
+
+                <button
+                  className="tr-download-btn"
+                  onClick={() => handleDownloadText(
+                    result.summary,
+                    `SmartDoc_AI_Summary_${index + 1}.txt`
+                  )}
+                >
+                  <FiDownload size={13} />
+                  Download
+                </button>
+
                 <button
                   className="tr-get-transcript-btn"
                   onClick={() =>
@@ -3240,9 +3630,11 @@ doc.save('SmartDoc_AI_Summary.pdf')
                       index
                     )
                   }
+                  disabled={pdfGeneratingKey === `batch-${result.id}`}
                 >
-                  Generate PDF
+                  {pdfGeneratingKey === `batch-${result.id}` ? 'Generating PDF...' : 'Generate PDF'}
                 </button>
+
               </div>
 
             </div>
@@ -3359,19 +3751,58 @@ doc.save('SmartDoc_AI_Summary.pdf')
                 {combinedSummary}
               </div>
 
+              <div style={{ marginTop: '12px' }}>
+                <span className="tr-text-stats">
+                  {(() => {
+                    const stats = getTextStats(combinedSummary)
+                    return `${stats.words} words • ${stats.chars} characters`
+                  })()}
+                </span>
+              </div>
+
               <div
                 style={{
                   marginTop: '20px',
                   display: 'flex',
-                  justifyContent: 'flex-end'
+                  justifyContent: 'flex-end',
+                  gap: '10px',
+                  flexWrap: 'wrap'
                 }}
               >
+
+                <button
+                  className={`tr-download-btn ${copiedKey === 'combined-summary' ? 'tr-copied-state' : ''}`}
+                  onClick={() => handleCopyToClipboard(combinedSummary, 'combined-summary')}
+                >
+                  {copiedKey === 'combined-summary' ? <FiCheck size={14} /> : <FiCopy size={14} />}
+                  {copiedKey === 'combined-summary' ? 'Copied' : 'Copy Summary'}
+                </button>
+
+                <button
+                  className="tr-download-btn"
+                  onClick={() => handleDownloadText(combinedSummary, 'SmartDoc_AI_Combined_Summary.txt')}
+                >
+                  <FiDownload size={14} />
+                  Download .txt
+                </button>
+
+                <button
+                  className="tr-download-btn"
+                  onClick={handleCombinedSummaryGeneration}
+                  disabled={isBatchProcessing}
+                >
+                  <FiRefreshCw size={14} />
+                  {isBatchProcessing ? 'Regenerating...' : 'Regenerate'}
+                </button>
+
                 <button
                   className="tr-get-transcript-btn"
                   onClick={handleCombinedPdfGeneration}
+                  disabled={pdfGeneratingKey === 'combined'}
                 >
-                  Generate Combined PDF
+                  {pdfGeneratingKey === 'combined' ? 'Generating PDF...' : 'Generate Combined PDF'}
                 </button>
+
               </div>
 
             </section>
@@ -3591,7 +4022,7 @@ doc.save('SmartDoc_AI_Summary.pdf')
 
         {/* TRANSCRIPT RESULT */}
 
-        {transcript && youtubeUrl.trim() && (
+        {activeMode === 'single' && transcript && youtubeUrl.trim() && (
 
           <section className="tr-card">
 
@@ -3621,6 +4052,51 @@ doc.save('SmartDoc_AI_Summary.pdf')
               }}
             >
               {transcript}
+            </div>
+
+            <div
+              style={{
+                marginTop: '14px',
+                display: 'flex',
+                flexWrap: 'wrap',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: '10px'
+              }}
+            >
+
+              <span className="tr-text-stats">
+                {(() => {
+                  const stats = getTextStats(transcript)
+                  return `${stats.words} words • ${stats.chars} characters`
+                })()}
+              </span>
+
+              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+
+                <button
+                  className={`tr-download-btn ${copiedKey === 'transcript' ? 'tr-copied-state' : ''}`}
+                  onClick={() => handleCopyToClipboard(transcript, 'transcript')}
+                >
+                  {copiedKey === 'transcript' ? <FiCheck size={14} /> : <FiCopy size={14} />}
+                  {copiedKey === 'transcript' ? 'Copied' : 'Copy Transcript'}
+                </button>
+
+                <button
+                  className="tr-download-btn"
+                  onClick={() =>
+                    handleDownloadText(
+                      transcript,
+                      `SmartDoc_AI_Transcript_${transcriptData?.videoId || 'video'}.txt`
+                    )
+                  }
+                >
+                  <FiDownload size={14} />
+                  Download .txt
+                </button>
+
+              </div>
+
             </div>
 
           </section>
@@ -3747,13 +4223,53 @@ doc.save('SmartDoc_AI_Summary.pdf')
                 {summary}
               </div>
 
-              <div style={{ marginTop: '20px', display: 'flex', justifyContent: 'flex-end' }}>
+              <div style={{ marginTop: '14px' }}>
+                <span className="tr-text-stats">
+                  {(() => {
+                    const stats = getTextStats(summary)
+                    return `${stats.words} words • ${stats.chars} characters`
+                  })()}
+                </span>
+              </div>
+
+              <div style={{ marginTop: '16px', display: 'flex', justifyContent: 'flex-end', gap: '10px', flexWrap: 'wrap' }}>
+
+                <button
+                  className={`tr-download-btn ${copiedKey === 'summary' ? 'tr-copied-state' : ''}`}
+                  onClick={() => handleCopyToClipboard(summary, 'summary')}
+                >
+                  {copiedKey === 'summary' ? <FiCheck size={14} /> : <FiCopy size={14} />}
+                  {copiedKey === 'summary' ? 'Copied' : 'Copy Summary'}
+                </button>
+
+                <button
+                  className="tr-download-btn"
+                  onClick={() =>
+                    handleDownloadText(
+                      summary,
+                      `SmartDoc_AI_Summary_${transcriptData?.videoId || 'video'}.txt`
+                    )
+                  }
+                >
+                  <FiDownload size={14} />
+                  Download .txt
+                </button>
+
+                <button
+                  className="tr-download-btn"
+                  onClick={handleSummaryGeneration}
+                  disabled={isSummaryLoading}
+                >
+                  <FiRefreshCw size={14} />
+                  {isSummaryLoading ? 'Regenerating...' : 'Regenerate'}
+                </button>
 
                 <button
                   className="tr-get-transcript-btn"
                   onClick={handlePdfGeneration}
+                  disabled={pdfGeneratingKey === 'single'}
                 >
-                  Generate PDF
+                  {pdfGeneratingKey === 'single' ? 'Generating PDF...' : 'Generate PDF'}
                 </button>
 
               </div>
