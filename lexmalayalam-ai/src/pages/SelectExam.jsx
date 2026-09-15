@@ -1,5 +1,7 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { supabase } from '../supabase'
+import { persistSelectedExamsToSupabase, writeSelectedExams } from '../utils/signupDraft'
 import './SelectExam.css'
 
 
@@ -248,10 +250,33 @@ export default function SelectExam() {
   const navigate = useNavigate()
 
   // Multiple exam selection
-  const [selectedExams, setSelectedExams] = useState([])
+  const [selectedExams, setSelectedExams] = useState(() => {
+    try {
+      const stored = JSON.parse(
+        localStorage.getItem('smartdoc_selected_exams') || '[]'
+      )
+      return Array.isArray(stored) ? stored : []
+    } catch {
+      return []
+    }
+  })
 
   const [recentExams, setRecentExams] = useState(initialRecentExams)
   const [showValidation, setShowValidation] = useState(false)
+  const [hasSession, setHasSession] = useState(false)
+  const [saveError, setSaveError] = useState('')
+
+  useEffect(() => {
+    let active = true
+
+    supabase.auth.getUser().then(({ data }) => {
+      if (active) setHasSession(Boolean(data?.user))
+    })
+
+    return () => {
+      active = false
+    }
+  }, [])
 
 
   /* =======================================================
@@ -340,32 +365,44 @@ export default function SelectExam() {
   ======================================================= */
   //folder funtion handling
 
- const handleContinue = () => {
-  if (selectedExams.length === 0) {
-    setShowValidation(true)
-    return
+ const handleContinue = async () => {
+    if (selectedExams.length === 0) {
+      setShowValidation(true)
+      return
+    }
+
+    console.log('Selected exams:', selectedExams)
+
+    setSaveError('')
+
+    const selectedExamDetails = examCategories.filter((exam) =>
+      selectedExams.includes(exam.id)
+    )
+
+    try {
+      if (hasSession) {
+        await persistSelectedExamsToSupabase(selectedExams)
+      } else {
+        writeSelectedExams(selectedExams)
+        try {
+          localStorage.setItem(
+            'smartdoc_selected_exam_details',
+            JSON.stringify(selectedExamDetails)
+          )
+        } catch {
+          /* storage may be unavailable in private mode */
+        }
+      }
+    } catch (error) {
+      console.error('Could not save selected exams:', error)
+      setSaveError(
+        'We could not save your exam selection. Please try again.'
+      )
+      return
+    }
+
+    navigate(hasSession ? '/home' : '/login')
   }
-
-  console.log('Selected exams:', selectedExams)
-
-  // Keep existing selected exam IDs
-  localStorage.setItem(
-    'smartdoc_selected_exams',
-    JSON.stringify(selectedExams)
-  )
-
-  // Store complete exam information for later use
-  const selectedExamDetails = examCategories.filter((exam) =>
-    selectedExams.includes(exam.id)
-  )
-
-  localStorage.setItem(
-    'smartdoc_selected_exam_details',
-    JSON.stringify(selectedExamDetails)
-  )
-
-  navigate('/login')
-}
 
 
   return (
@@ -754,6 +791,15 @@ export default function SelectExam() {
             role="alert"
           >
             Please select at least one exam before continuing.
+          </div>
+        )}
+
+        {saveError && (
+          <div
+            className="validation-toast"
+            role="alert"
+          >
+            {saveError}
           </div>
         )}
 

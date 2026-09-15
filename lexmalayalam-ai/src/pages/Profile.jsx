@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../supabase'
+import { readProfilePreferences } from '../utils/profilePreferences'
 
 import {
   FiArrowLeft,
@@ -102,6 +103,7 @@ export default function Profile() {
 
   const fullName = user?.user_metadata?.full_name || 'User'
   const userEmail = user?.email || ''
+  const preferredLanguage = readProfilePreferences().language
 
   const getInitial = (name) => {
     return name?.trim()?.charAt(0)?.toUpperCase() || 'U'
@@ -234,8 +236,8 @@ export default function Profile() {
           <ProfileMenuItem
             icon={<FiGlobe size={18} />}
             title="Language"
-            subtitle="English"
-            onClick={() => navigate('/settings/language')}
+            subtitle={preferredLanguage}
+            onClick={() => navigate('/settings')}
             isLast
           />
         </ProfileSection>
@@ -253,7 +255,7 @@ export default function Profile() {
             icon={<FiHelpCircle size={18} />}
             title="Help & Support"
             subtitle="Get help with SmartDoc AI"
-            onClick={() => navigate('/support')}
+            onClick={() => navigate('/help')}
           />
           <ProfileMenuItem
             icon={<FiInfo size={18} />}

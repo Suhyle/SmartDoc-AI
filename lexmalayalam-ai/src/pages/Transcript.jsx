@@ -41,9 +41,30 @@ import {
 } from 'react-icons/fi'
 
 import { savePDF } from '../services/pdfStorage'
+import { supabase } from '../supabase'
+import { getExamCategory, uniqueExamFolders } from '../utils/examFolders'
+import { ensureCustomDocumentFolder, getCustomDocumentFolders } from '../utils/documentFolders'
 
 import './Transcript.css'
 import './Home.css'
+
+const saveAndDownloadPDF = async (pdfData, doc, filename) => {
+  let savedPDF = null
+  let storageError = null
+
+  try {
+    if (pdfData.category && pdfData.examName && pdfData.examName !== 'General') {
+      ensureCustomDocumentFolder(pdfData.category, pdfData.examName)
+    }
+    savedPDF = await savePDF(pdfData)
+  } catch (error) {
+    storageError = error
+    console.error('Unable to save generated PDF in the local SmartDoc library:', error)
+  }
+
+  doc.save(filename)
+  return { savedPDF, storageError }
+}
 
 export default function Transcript() {
 
@@ -61,6 +82,120 @@ export default function Transcript() {
         ? 'multiple'
         : 'single'
     )
+
+  const [pdfCategories, setPdfCategories] = useState(['Other'])
+  const [pdfCategory, setPdfCategory] = useState(
+    getExamCategory(
+      location.state?.documentCategory ||
+      location.state?.studyPlanCategory ||
+      location.state?.studyPlanExamName
+    ) || ''
+  )
+  const [customExamFolders, setCustomExamFolders] = useState({})
+  const [pdfExamName, setPdfExamName] = useState(
+    location.state?.documentSubfolder || location.state?.studyPlanExamName || 'General'
+  )
+
+  useEffect(() => {
+    let active = true
+
+    const loadPDFExamOptions = async () => {
+      let localFolders = {}
+      try {
+        try {
+          localFolders = getCustomDocumentFolders()
+        } catch (storageError) {
+          console.error('Unable to load custom document subfolders:', storageError)
+        }
+
+        const { data, error } = await supabase.auth.getUser()
+        if (error) throw error
+
+        const selectedExams = data.user?.user_metadata?.selected_exams || []
+        const categories = uniqueExamFolders([
+          ...(Array.isArray(selectedExams) ? selectedExams : [selectedExams]),
+          ...Object.keys(localFolders),
+          location.state?.documentCategory,
+          location.state?.studyPlanCategory,
+          'Other'
+        ])
+        if (!active) return
+
+        setPdfCategories(categories)
+        setCustomExamFolders(localFolders)
+        setPdfCategory((current) => {
+          const requested = getExamCategory(
+            location.state?.documentCategory ||
+            location.state?.studyPlanCategory ||
+            location.state?.studyPlanExamName
+          )
+          if (requested && categories.includes(requested)) return requested
+          if (current && current !== 'Other' && categories.includes(current)) return current
+          return categories.find((category) => category !== 'Other') || categories[0] || 'Other'
+        })
+        if (location.state?.documentSubfolder) {
+          setPdfExamName(location.state.documentSubfolder)
+        } else if (location.state?.studyPlanExamName) {
+          setPdfExamName(location.state.studyPlanExamName)
+        } else {
+          setPdfExamName('General')
+        }
+      } catch (error) {
+        console.error('Unable to load PDF exam choices:', error)
+        if (active) {
+          const fallback = uniqueExamFolders([
+            ...Object.keys(localFolders),
+            location.state?.documentCategory,
+            location.state?.studyPlanCategory,
+            'Other'
+          ])
+          setPdfCategories(fallback)
+          setPdfCategory(
+            getExamCategory(location.state?.documentCategory) || fallback.find((category) => category !== 'Other') || 'Other'
+          )
+          setPdfExamName(location.state?.documentSubfolder || location.state?.studyPlanExamName || 'General')
+        }
+      }
+    }
+
+    loadPDFExamOptions()
+    return () => { active = false }
+  }, [location.state?.documentCategory, location.state?.documentSubfolder, location.state?.studyPlanCategory, location.state?.studyPlanExamName])
+
+  const subfolderOptions = useMemo(() => {
+    const currentCategory = getExamCategory(pdfCategory)
+    const options = [
+      ...(
+      Array.isArray(customExamFolders[currentCategory])
+        ? customExamFolders[currentCategory]
+        : []
+      )
+    ]
+
+    if (location.state?.studyPlanExamName && getExamCategory(location.state.studyPlanCategory) === currentCategory) {
+      options.push(location.state.studyPlanExamName)
+    }
+    const seen = new Set()
+    return [...options, 'General'].filter((name) => {
+      const key = String(name).toLocaleLowerCase()
+      if (seen.has(key)) return false
+      seen.add(key)
+      return true
+    })
+  }, [customExamFolders, location.state?.studyPlanCategory, location.state?.studyPlanExamName, pdfCategory])
+
+  useEffect(() => {
+    if (!subfolderOptions.includes(pdfExamName)) {
+      setPdfExamName(location.state?.studyPlanExamName || subfolderOptions[0] || 'General')
+    }
+  }, [location.state?.studyPlanExamName, pdfExamName, subfolderOptions])
+
+  const pdfExamId = (
+    location.state?.studyPlanExamName === pdfExamName
+    && getExamCategory(location.state?.studyPlanCategory) === getExamCategory(pdfCategory)
+      ? location.state?.studyPlanExamId
+      : ''
+  )
 
   // ==========================================
   // SINGLE VIDEO — YOUTUBE URL
@@ -1000,6 +1135,10 @@ const [isBatchProcessing, setIsBatchProcessing] = useState(false)
   const [isStateRestored, setIsStateRestored] =
     useState(false)
 
+  const incomingYoutubeUrl = String(
+    location.state?.youtubeUrl || location.state?.studyPlanVideoUrl || ''
+  ).trim()
+
   useEffect(() => {
     try {
       const saved = sessionStorage.getItem(TRANSCRIPT_STATE_KEY)
@@ -1023,12 +1162,20 @@ const [isBatchProcessing, setIsBatchProcessing] = useState(false)
         if (state.summaryType) setSummaryType(state.summaryType)
         if (typeof state.aiPrompt === 'string') setAiPrompt(state.aiPrompt)
       }
+
+      if (incomingYoutubeUrl) {
+        setActiveMode('single')
+        setYoutubeUrl(incomingYoutubeUrl)
+        setTranscript('')
+        setTranscriptData(null)
+        setSummary('')
+      }
     } catch (error) {
       console.error('Unable to restore Transcript page state:', error)
     } finally {
       setIsStateRestored(true)
     }
-  }, [])
+  }, [incomingYoutubeUrl])
 
   useEffect(() => {
     if (!isStateRestored) return
@@ -1961,20 +2108,20 @@ const [isBatchProcessing, setIsBatchProcessing] = useState(false)
 
       const pdfBlob = doc.output('blob')
 
-      await savePDF({
+      const { storageError } = await saveAndDownloadPDF({
         blob: pdfBlob,
         title: `${title} - ${summaryTypeLabel}`,
-        category: 'Other',
+        category: pdfCategory,
+        examName: pdfExamName,
+        examId: pdfExamId || '',
         sourceUrl: result.url || '',
         summaryType: summaryTypeLabel,
         language: isMalayalam ? 'Malayalam' : 'English'
-      })
+      }, doc, `SmartDoc_AI_Video_${index + 1}_Summary.pdf`)
 
-      doc.save(
-        `SmartDoc_AI_Video_${index + 1}_Summary.pdf`
-      )
-
-      alert('PDF saved to Downloads successfully.')
+      alert(storageError
+        ? 'The PDF was downloaded to your device, but could not be saved in the SmartDoc library. Check available browser or app storage.'
+        : 'PDF saved in your SmartDoc library and downloaded to your device.')
 
     } catch (error) {
 
@@ -2197,25 +2344,23 @@ const [isBatchProcessing, setIsBatchProcessing] = useState(false)
 
       const pdfBlob = doc.output('blob')
 
-      await savePDF({
+      const { storageError } = await saveAndDownloadPDF({
         blob: pdfBlob,
         title: `Combined Summary - ${completedVideos.length} Videos`,
-        category: 'Other',
+        category: pdfCategory,
+        examName: pdfExamName,
+        examId: pdfExamId || '',
         sourceUrl: completedVideos
           .map((item) => item.url)
           .filter(Boolean)
           .join(', '),
         summaryType: `${summaryTypeLabel} - Combined`,
         language: isMalayalam ? 'Malayalam' : 'English'
-      })
+      }, doc, 'SmartDoc_AI_Combined_Summary.pdf')
 
-      doc.save(
-        'SmartDoc_AI_Combined_Summary.pdf'
-      )
-
-      alert(
-        'Combined PDF saved to Downloads successfully.'
-      )
+      alert(storageError
+        ? 'The combined PDF was downloaded to your device, but could not be saved in the SmartDoc library. Check available browser or app storage.'
+        : 'Combined PDF saved in your SmartDoc library and downloaded to your device.')
 
     } catch (error) {
 
@@ -2540,27 +2685,30 @@ const [isBatchProcessing, setIsBatchProcessing] = useState(false)
 
         const pdfBlob = doc.output('blob')
 
-const savedPDF = await savePDF({
+const { savedPDF, storageError } = await saveAndDownloadPDF({
   blob: pdfBlob,
   title:
     transcriptData?.title ||
     'SmartDoc AI Summary',
-  category: 'Other',
+  category: pdfCategory,
+  examName: pdfExamName,
+  examId: pdfExamId || '',
   sourceUrl: youtubeUrl.trim(),
   summaryType: summaryTypeLabel,
   language:
     language === 'malayalam'
       ? 'Malayalam'
       : 'English'
-})
+}, doc, 'SmartDoc_AI_Summary.pdf')
 
 console.log(
   'PDF saved to SmartDoc AI Downloads:',
   savedPDF
 )
 
-// Keep computer download
-doc.save('SmartDoc_AI_Summary.pdf')
+if (storageError) {
+  alert('The PDF was downloaded to your device, but could not be saved in the SmartDoc library. Check available browser or app storage.')
+}
 
       } catch (error) {
 
@@ -2676,6 +2824,33 @@ doc.save('SmartDoc_AI_Summary.pdf')
             Multiple Videos
           </button>
 
+        </div>
+
+        <div className="tr-pdf-folder-choice">
+          <div>
+            <strong>Choose a document folder</strong>
+            <span>Choose the exam category and specific exam. The PDF is saved inside that subfolder.</span>
+          </div>
+          <div className="tr-pdf-folder-selects">
+            <select
+              aria-label="Choose an exam category for generated PDFs"
+              value={pdfCategory}
+              onChange={(event) => setPdfCategory(event.target.value)}
+            >
+              {pdfCategories.map((category) => (
+                <option key={category} value={category}>{category}</option>
+              ))}
+            </select>
+            <select
+              aria-label="Choose an exam subfolder for generated PDFs"
+              value={pdfExamName}
+              onChange={(event) => setPdfExamName(event.target.value)}
+            >
+              {subfolderOptions.map((examName) => (
+                <option key={examName} value={examName}>{examName}</option>
+              ))}
+            </select>
+          </div>
         </div>
 
 

@@ -87,8 +87,7 @@ const Signup = () => {
         password: password,
 
         options: {
-          emailRedirectTo:
-            'https://smart-doc-ai-two.vercel.app/email-verified',
+          emailRedirectTo: `${window.location.origin}/email-verified`,
 
           data: {
             full_name: name.trim(),
@@ -108,20 +107,22 @@ const Signup = () => {
       console.log('Registration successful:', data)
 
       // -----------------------------------------------------
-      // IMPORTANT FLOW
+      // REGISTRATION FLOW
       //
-      // Old:
-      // Signup → Login
+      // Signup → Qualification Form → Select Exam → App
       //
-      // New:
-      // Signup → Select Exam → Login
+      // When Supabase email confirmation is enabled there is no
+      // session yet, so the qualification details are held in a
+      // device draft and attached to the account on first sign-in.
       // -----------------------------------------------------
 
-      alert(
-        'Account created successfully! Check your email to verify your account.'
-      )
-
-      navigate('/select-exam')
+      navigate('/qualification-form', {
+        state: {
+          fullName: name.trim(),
+          email: email.trim(),
+          needsEmailConfirmation: !data?.session,
+        },
+      })
 
     } catch (error) {
       console.error('Registration error:', error)

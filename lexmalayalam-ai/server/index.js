@@ -5,6 +5,20 @@ import Groq from "groq-sdk";
 import Cerebras from "@cerebras/cerebras_cloud_sdk";
 import { GoogleGenAI } from "@google/genai";
 import { YoutubeTranscript } from "youtube-transcript";
+import {
+  buildOllamaRetrievedSyllabusPrompt,
+  buildMoreStudyVideosPrompt,
+  buildStudyPlanPrompt,
+  OLLAMA_RETRIEVED_SYLLABUS_SYSTEM_INSTRUCTION,
+  STUDY_PLAN_VIDEO_SYSTEM_INSTRUCTION,
+  STUDY_PLAN_SYSTEM_INSTRUCTION,
+} from "./prompts/studyPlanPrompts.js";
+import {
+  buildQuizGenerationPrompt,
+  buildQuizGradingPrompt,
+  QUIZ_GENERATION_SYSTEM_INSTRUCTION,
+  QUIZ_GRADING_SYSTEM_INSTRUCTION,
+} from "./prompts/quizPrompts.js";
 
 dotenv.config();
 
@@ -35,6 +49,14 @@ const PORT = process.env.PORT || 5000;
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const GROQ_API_KEY = process.env.GROQ_API_KEY;
 const CEREBRAS_API_KEY = process.env.CEREBRAS_API_KEY;
+const OLLAMA_API_KEY = process.env.OLLAMA_API_KEY;
+const IS_VERCEL = Boolean(process.env.VERCEL);
+const OLLAMA_BASE_URL = (process.env.OLLAMA_BASE_URL || (IS_VERCEL ? "https://ollama.com" : "http://127.0.0.1:11434")).replace(/\/$/, "");
+const OLLAMA_MODEL = process.env.OLLAMA_MODEL || (IS_VERCEL ? "" : "qwen3:4b");
+// Study Plan uses Ollama Cloud's hosted DeepSeek model independently of the
+// local Ollama model used by transcript features.
+const STUDY_PLAN_OLLAMA_BASE_URL = (process.env.STUDY_PLAN_OLLAMA_BASE_URL || "https://ollama.com").replace(/\/$/, "");
+const STUDY_PLAN_OLLAMA_MODEL = process.env.STUDY_PLAN_OLLAMA_MODEL || "deepseek-v4.1-flash:cloud";
 
 // ==========================================================
 // AI CLIENTS
@@ -62,7 +84,8 @@ const cerebras = CEREBRAS_API_KEY
 // AI MODELS
 // ==========================================================
 
-const GEMINI_MODEL = "gemini-3.6-flash";
+const GEMINI_MODEL = "gemini-3.7-flash";
+const ANTIGRAVITY_MODEL = "gemini-3.5-flash";
 const CEREBRAS_MODEL = "gpt-oss-120b";
 const GROQ_MODEL = "openai/gpt-oss-120b";
 
@@ -74,6 +97,16 @@ const PROVIDERS = {
   GEMINI: "SmartDoc AI 1",
   CEREBRAS: "SmartDoc AI 2",
   GROQ: "SmartDoc AI 3",
+  OLLAMA: "SmartDoc AI 4",
+};
+
+// Study Plan has its own provider labels and order. Do not change the
+// transcript provider labels or fallback behavior.
+const STUDY_PLAN_PROVIDER_FLAGS = {
+  GEMINI: "SmartDoc AI 1",
+  GROQ: "SmartDoc AI 2",
+  ANTIGRAVITY: "SmartDoc AI 3",
+  OLLAMA: "SmartDoc AI 4",
 };
 
 // ==========================================================
@@ -114,6 +147,8 @@ async function askGemini(messages, options = {}) {
         systemMessage?.content || "You are SmartDoc AI.",
       maxOutputTokens:
         options.maxCompletionTokens || 4096,
+      ...(options.enableGoogleSearch ? { tools: [{ googleSearch: {} }] } : {}),
+      ...(options.responseMimeType ? { responseMimeType: options.responseMimeType } : {}),
     },
   });
 
@@ -189,6 +224,7 @@ async function askGroq(messages, options = {}) {
     await groq.chat.completions.create({
       model: GROQ_MODEL,
       messages,
+      ...(options.enableBrowserSearch ? { tools: [{ type: "browser_search" }] } : {}),
       temperature: 0.2,
       max_completion_tokens: Math.min(
         options.maxCompletionTokens || 4096,
@@ -212,6 +248,46 @@ async function askGroq(messages, options = {}) {
 
   console.log("Groq succeeded.");
 
+  return content.trim();
+}
+
+async function askOllama(messages, options = {}) {
+  console.log(`Trying Ollama ${IS_VERCEL ? "Cloud" : "locally"} (${OLLAMA_MODEL})...`);
+  if (IS_VERCEL && !OLLAMA_API_KEY) {
+    throw new Error("Ollama on Vercel needs OLLAMA_API_KEY and a cloud model in Vercel Environment Variables; Vercel cannot reach Ollama on your PC.");
+  }
+  if (IS_VERCEL && !OLLAMA_MODEL) {
+    throw new Error("Set OLLAMA_MODEL in Vercel to a cloud model available to your Ollama account.");
+  }
+
+  const response = await fetch(`${OLLAMA_BASE_URL}/api/chat`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(OLLAMA_API_KEY ? { Authorization: `Bearer ${OLLAMA_API_KEY}` } : {}),
+    },
+    body: JSON.stringify({
+      model: OLLAMA_MODEL,
+      messages,
+      stream: false,
+      options: {
+        temperature: 0.2,
+        num_predict: Math.min(options.maxCompletionTokens || 4096, 8192),
+      },
+    }),
+    signal: AbortSignal.timeout(300000),
+  });
+
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(result?.error || `Ollama returned HTTP ${response.status}.`);
+  }
+
+  const content = result?.message?.content;
+  if (!content) throw new Error("Ollama returned an empty response.");
+
+  recordProvider(PROVIDERS.OLLAMA, options.providerTracker);
+  console.log("Ollama succeeded.");
   return content.trim();
 }
 
@@ -263,6 +339,17 @@ async function askAI(messages, options = {}) {
   } catch (error) {
     console.error(
       "Groq failed:",
+      error?.message || error
+    );
+  }
+
+  // 4. OLLAMA (local)
+  try {
+    const result = await askOllama(messages, options);
+    if (result) return result;
+  } catch (error) {
+    console.error(
+      "Ollama failed:",
       error?.message || error
     );
   }
@@ -2848,6 +2935,846 @@ ${combinedTranscript}
     }
   }
 );
+
+// ==========================================================
+// STUDY PLAN GENERATION
+// ==========================================================
+
+function buildStudySchedule(sections, durationDays, studyHoursPerDay, startDate) {
+  const start = new Date(`${startDate}T00:00:00.000Z`);
+  const days = Array.from({ length: durationDays }, (_, index) => {
+    const date = new Date(start);
+    date.setUTCDate(start.getUTCDate() + index);
+    const section = sections[index % sections.length];
+    const topics = Array.isArray(section.topics) ? section.topics.filter(Boolean) : [];
+    const activity = (index + 1) % 14 === 0
+      ? "Mock test"
+      : (index + 1) % 7 === 0
+        ? "Revision"
+        : index % 2 === 0
+          ? "Learn"
+          : "Practice";
+
+    return {
+      date: date.toISOString().slice(0, 10),
+      day: date.toLocaleDateString("en-US", { weekday: "long", timeZone: "UTC" }),
+      tasks: [{
+        section: section.name,
+        topic: topics.length ? topics[Math.floor(index / sections.length) % topics.length] : section.name,
+        studyHours: studyHoursPerDay,
+        activity,
+      }],
+    };
+  });
+
+  const weeks = [];
+  for (let index = 0; index < days.length; index += 7) {
+    const weekNumber = weeks.length + 1;
+    const weekDays = days.slice(index, index + 7);
+    const focusSections = [...new Set(weekDays.map((day) => day.tasks[0].section))];
+    weeks.push({
+      weekNumber,
+      focus: focusSections.join(" and "),
+      days: weekDays,
+    });
+  }
+  return weeks;
+}
+
+async function askAntigravityStudyPlan(messages, options = {}) {
+  console.log("Trying Antigravity...");
+  if (!GEMINI_API_KEY || !gemini) {
+    throw new Error("GEMINI_API_KEY is missing.");
+  }
+
+  const systemInstruction = messages.find((message) => message.role === "system")?.content || "You are SmartDoc AI.";
+  const input = messages
+    .filter((message) => message.role === "user")
+    .map((message) => message.content)
+    .join("\n\n");
+  const interaction = await gemini.interactions.create({
+    agent: "antigravity-preview-09-2026",
+    environment: "remote",
+    system_instruction: systemInstruction,
+    input,
+    tools: [
+      { type: "google_search" },
+      { type: "url_context" },
+    ],
+    agent_config: {
+      type: "antigravity",
+      model: ANTIGRAVITY_MODEL,
+      max_total_tokens: "12000",
+    },
+  }, { timeout: 300000 });
+
+  const content = interaction?.output_text;
+  if (!content) throw new Error("Antigravity returned an empty study plan.");
+
+  recordProvider(STUDY_PLAN_PROVIDER_FLAGS.ANTIGRAVITY, options.providerTracker);
+  console.log("Antigravity succeeded.");
+  return content.trim();
+}
+
+async function askOllamaStudyPlan(messages, options = {}) {
+  console.log(`Trying Ollama Cloud (${STUDY_PLAN_OLLAMA_MODEL}) for Study Plan...`);
+  if (!OLLAMA_API_KEY) {
+    throw new Error("Study Plan Ollama Cloud needs OLLAMA_API_KEY in the backend environment.");
+  }
+  const response = await fetch(`${STUDY_PLAN_OLLAMA_BASE_URL}/api/chat`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(OLLAMA_API_KEY ? { Authorization: `Bearer ${OLLAMA_API_KEY}` } : {}),
+    },
+    body: JSON.stringify({
+      model: STUDY_PLAN_OLLAMA_MODEL,
+      messages,
+      format: "json",
+      stream: false,
+      options: { temperature: 0.2, num_predict: 8192 },
+    }),
+    signal: AbortSignal.timeout(300000),
+  });
+
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(result?.error || `Ollama returned HTTP ${response.status}.`);
+  }
+  const content = result?.message?.content;
+  if (!content) throw new Error("Ollama returned an empty study plan.");
+
+  recordProvider(STUDY_PLAN_PROVIDER_FLAGS.OLLAMA, options.providerTracker);
+  console.log("Ollama succeeded.");
+  return content.trim();
+}
+
+function parseStudyPlanJson(responseText) {
+  const cleaned = String(responseText || "")
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/\s*```$/, "")
+    .trim();
+  const firstBrace = cleaned.indexOf("{");
+  const lastBrace = cleaned.lastIndexOf("}");
+  if (firstBrace < 0 || lastBrace < firstBrace) throw new Error("Provider returned no JSON study plan.");
+  return JSON.parse(cleaned.slice(firstBrace, lastBrace + 1));
+}
+
+function normalizeQuizQuestions(payload, requestedFormat, requestedCount) {
+  const rawQuestions = Array.isArray(payload?.questions) ? payload.questions : [];
+  const seen = new Set();
+  const questions = [];
+
+  for (const [index, item] of rawQuestions.entries()) {
+    if (!item || typeof item !== "object") continue;
+    const text = String(item.text || item.question || "").trim();
+    const dedupeKey = text.toLocaleLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+    if (!text || seen.has(dedupeKey)) continue;
+    seen.add(dedupeKey);
+
+    let type = String(item.type || (requestedFormat === "written" ? "written" : "mcq")).toLowerCase();
+    type = type === "written" ? "written" : "mcq";
+    if (requestedFormat === "mcq") type = "mcq";
+    if (requestedFormat === "written") type = "written";
+
+    const question = {
+      id: String(item.id || `q${index + 1}`).slice(0, 80),
+      type,
+      text: text.slice(0, 1500),
+      answer: String(item.answer || item.correctAnswer || "").trim().slice(0, 3000),
+      explanation: String(item.explanation || item.rubric || "").trim().slice(0, 3000),
+      topic: String(item.topic || "General").trim().slice(0, 200),
+      chapter: String(item.chapter || "").trim().slice(0, 200),
+      sourceTitle: String(item.sourceTitle || "").trim().slice(0, 240),
+    };
+
+    if (type === "mcq") {
+      question.options = Array.isArray(item.options)
+        ? item.options.map((option) => String(option || "").trim()).filter(Boolean).slice(0, 4)
+        : [];
+      const answerLetter = question.answer.toUpperCase().match(/^\(?([A-D])\)?[.)]?$/)?.[1];
+      if (answerLetter && question.options.length === 4) {
+        question.answer = question.options[answerLetter.charCodeAt(0) - 65];
+      }
+      if (question.options.length !== 4
+        || new Set(question.options.map((option) => option.toLowerCase())).size !== 4
+        || !question.answer
+        || !question.options.some((option) => option === question.answer)) continue;
+    } else if (!question.answer) {
+      continue;
+    }
+
+    questions.push(question);
+    if (questions.length >= requestedCount) break;
+  }
+
+  if (requestedFormat === "mixed" && questions.length > 1
+    && !questions.some((question) => question.type === "written")) {
+    const writtenQuestion = rawQuestions.find((item) => String(item?.type || "").toLowerCase() === "written" && item?.answer);
+    if (writtenQuestion) {
+      const normalizedWritten = normalizeQuizQuestions({ questions: [writtenQuestion] }, "written", 1)[0];
+      if (normalizedWritten) questions[questions.length - 1] = normalizedWritten;
+    }
+  }
+
+  if (!questions.length) throw new Error("The AI providers did not return any valid questions. Try fewer questions or select more study material.");
+  return questions;
+}
+
+async function runQuizGenerationWithFallback(messages, requestedFormat, requestedCount) {
+  const attempts = [];
+  attempts.push(
+    { name: "Gemini", run: () => askGemini(messages, { maxCompletionTokens: 8192, responseMimeType: "application/json" }) },
+    { name: "Groq", run: () => askGroq(messages, { maxCompletionTokens: 4096 }) },
+    { name: "Ollama Cloud", run: () => askOllamaStudyPlan(messages) },
+    { name: "Cerebras", run: () => askCerebras(messages, { maxCompletionTokens: 4096 }) },
+  );
+  if (!IS_VERCEL && OLLAMA_MODEL) {
+    attempts.push({ name: "Local Ollama", run: () => askOllama(messages, { maxCompletionTokens: 4096 }) });
+  }
+
+  const errors = [];
+  for (const attempt of attempts) {
+    try {
+      const result = await attempt.run();
+      const payload = parseStudyPlanJson(result);
+      normalizeQuizQuestions(payload, requestedFormat, requestedCount);
+      return { payload, provider: attempt.name, errors };
+    } catch (error) {
+      const message = String(error?.message || "Unknown provider error.");
+      errors.push(`${attempt.name}: ${message}`);
+      console.error(`Quiz ${attempt.name} failed:`, message);
+    }
+  }
+  throw new Error(`All quiz question providers failed. ${errors.join(" | ")}`);
+}
+
+function getQuizImage(imageDataUrl) {
+  if (!imageDataUrl) return null;
+  const match = String(imageDataUrl).match(/^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/=]+)$/i);
+  if (!match) throw new Error("Upload a PNG, JPG, or WebP image of your answer.");
+  const bytes = Buffer.from(match[2], "base64");
+  if (bytes.length > 6 * 1024 * 1024) throw new Error("The answer photo must be 6 MB or smaller.");
+  return { mimeType: match[1].toLowerCase(), base64: match[2] };
+}
+
+function parseQuizGrade(responseText) {
+  const payload = parseStudyPlanJson(responseText);
+  const score = Number(payload?.score);
+  if (!Number.isFinite(score)) throw new Error("The grading provider returned no valid score.");
+  return {
+    score: Math.max(0, Math.min(10, Math.round(score * 10) / 10)),
+    extractedText: String(payload?.extractedText || "").trim().slice(0, 12000),
+    feedback: String(payload?.feedback || "").trim().slice(0, 4000),
+    rubric: String(payload?.rubric || "").trim().slice(0, 4000),
+  };
+}
+
+function youtubeVideoKey(url) {
+  try {
+    const parsed = new URL(url);
+    const host = parsed.hostname.toLowerCase().replace(/^www\./, "");
+    if (host === "youtu.be") return parsed.pathname.split("/").filter(Boolean)[0] || "";
+    if (host === "youtube.com" || host === "m.youtube.com") {
+      return parsed.searchParams.get("v")
+        || parsed.pathname.match(/\/(?:embed|shorts)\/([^/?]+)/)?.[1]
+        || "";
+    }
+  } catch {
+    return "";
+  }
+  return "";
+}
+
+function officialSyllabusHostAllowed(url, exam) {
+  try {
+    const host = new URL(url).hostname.toLowerCase().replace(/^www\./, "");
+    const trustedExamHosts = [exam?.official_notification_url, exam?.official_website_url]
+      .map((value) => {
+        try { return new URL(value).hostname.toLowerCase().replace(/^www\./, ""); } catch { return ""; }
+      })
+      .filter(Boolean);
+    if (trustedExamHosts.includes(host)) return true;
+
+    const category = String(exam?.category || "").toLowerCase();
+    if (category.includes("psc")) return host === "keralapsc.gov.in";
+    if (category === "ssc" || category.includes("staff selection")) return host === "ssc.gov.in";
+    if (category.includes("upsc") || category.includes("union public")) return ["upsc.gov.in", "upsconline.nic.in"].includes(host);
+    if (category.includes("rail") || category.includes("rrb")) return host === "indianrailways.gov.in" || (/^rrb[a-z0-9-]*\.gov\.in$/i).test(host);
+    if (category.includes("bank")) return ["ibps.in", "rbi.org.in"].includes(host) || host.endsWith(".bank.in");
+    return false;
+  } catch {
+    return false;
+  }
+}
+
+async function getOllamaOfficialSyllabusEvidence(exam) {
+  if (!OLLAMA_API_KEY) throw new Error("Ollama syllabus search needs OLLAMA_API_KEY in the backend environment.");
+  const query = `${exam.exam_name} ${exam.category} ${exam.organization} official syllabus recruitment notification exam pattern`;
+  const searchResponse = await fetch("https://ollama.com/api/web_search", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${OLLAMA_API_KEY}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ query }),
+    signal: AbortSignal.timeout(15000),
+  });
+  if (!searchResponse.ok) {
+    throw new Error(`Ollama web search returned HTTP ${searchResponse.status}.`);
+  }
+  const searchPayload = await searchResponse.json();
+  const officialResults = (Array.isArray(searchPayload?.results) ? searchPayload.results : [])
+    .filter((result) => result?.url && officialSyllabusHostAllowed(result.url, exam))
+    .slice(0, 3);
+  if (!officialResults.length) {
+    throw new Error("Ollama Web Search found no results on an allowed official exam authority domain.");
+  }
+
+  const evidence = await Promise.all(officialResults.map(async (result) => {
+    let fetched = null;
+    try {
+      const response = await fetch("https://ollama.com/api/web_fetch", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${OLLAMA_API_KEY}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ url: result.url }),
+        signal: AbortSignal.timeout(15000),
+      });
+      if (response.ok) fetched = await response.json();
+    } catch (error) {
+      console.warn("Ollama Web Fetch failed for official syllabus result:", String(error?.message || error));
+    }
+    return {
+      title: String(fetched?.title || result.title || "Official exam notice"),
+      url: result.url,
+      searchSnippet: String(result.content || "").slice(0, 2500),
+      fetchedText: String(fetched?.content || "").slice(0, 9000),
+    };
+  }));
+  return evidence;
+}
+
+async function searchOllamaVideos({ exam, sections, excludedKeys, count }) {
+  if (!OLLAMA_API_KEY) {
+    throw new Error("Ollama web search needs OLLAMA_API_KEY in the backend environment.");
+  }
+
+  const examName = String(exam.exam_name || exam.examName || "").trim();
+  const category = String(exam.category || "").trim();
+  const seenKeys = new Set(excludedKeys);
+  const videos = [];
+  const searchSections = sections.slice(0, Math.max(count, 1));
+
+  for (const section of searchSections) {
+    if (videos.length >= count) break;
+    const sectionName = String(section?.name || "").trim();
+    const topics = Array.isArray(section?.topics) ? section.topics.slice(0, 3).join(" ") : "";
+    const query = `${examName} ${category} ${sectionName} ${topics} YouTube lessons site:youtube.com/watch`;
+    const response = await fetch("https://ollama.com/api/web_search", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${OLLAMA_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ query }),
+      signal: AbortSignal.timeout(15000),
+    });
+
+    if (!response.ok) {
+      const details = await response.text().catch(() => "");
+      throw new Error(`Ollama web search returned HTTP ${response.status}${details ? `: ${details.slice(0, 300)}` : ""}`);
+    }
+
+    const payload = await response.json();
+    for (const result of Array.isArray(payload?.results) ? payload.results : []) {
+      const url = String(result?.url || "").trim();
+      const key = youtubeVideoKey(url);
+      if (!key || seenKeys.has(key)) continue;
+      seenKeys.add(key);
+      videos.push({
+        title: String(result?.title || sectionName || "Recommended lesson").trim(),
+        topic: sectionName,
+        channel: "YouTube",
+        youtubeUrl: url,
+        duration: "",
+      });
+      if (videos.length >= count) break;
+    }
+  }
+
+  return JSON.stringify({ videos });
+}
+
+app.post("/api/study-plan/videos", async (req, res) => {
+  const { exam = {}, sections = [], excludedVideoUrls = [], count = 4 } = req.body || {};
+  const examName = String(exam.exam_name || exam.examName || "").trim();
+  if (!examName || !Array.isArray(sections) || !sections.length) {
+    return res.status(400).json({ success: false, error: "Generate a study plan before finding more videos." });
+  }
+
+  const safeCount = Math.min(4, Math.max(1, Math.floor(Number(count) || 4)));
+  const excludedKeys = new Set(excludedVideoUrls.map(youtubeVideoKey).filter(Boolean));
+  const videoPrompt = buildMoreStudyVideosPrompt({
+    exam,
+    sections,
+    excludedVideoUrls,
+    count: safeCount,
+  });
+  const attempts = [
+    {
+      name: "Gemini",
+      run: () => askGemini([
+        { role: "system", content: STUDY_PLAN_VIDEO_SYSTEM_INSTRUCTION },
+        { role: "user", content: videoPrompt },
+      ], { maxCompletionTokens: 4096, enableGoogleSearch: true, responseMimeType: "application/json" }),
+    },
+    {
+      name: "Groq",
+      run: () => askGroq([
+        { role: "system", content: STUDY_PLAN_VIDEO_SYSTEM_INSTRUCTION },
+        { role: "user", content: videoPrompt },
+      ], { maxCompletionTokens: 4096, enableBrowserSearch: true }),
+    },
+    {
+      name: "Antigravity",
+      run: () => askAntigravityStudyPlan([
+        { role: "system", content: STUDY_PLAN_VIDEO_SYSTEM_INSTRUCTION },
+        { role: "user", content: videoPrompt },
+      ]),
+    },
+    {
+      name: "Ollama Web Search",
+      run: () => searchOllamaVideos({ exam, sections, excludedKeys, count: safeCount }),
+    },
+  ];
+  const errors = [];
+
+  for (const attempt of attempts) {
+    try {
+      const parsed = parseStudyPlanJson(await attempt.run());
+      const seenKeys = new Set(excludedKeys);
+      const videos = (Array.isArray(parsed?.videos) ? parsed.videos : [])
+        .filter((video) => {
+          const key = youtubeVideoKey(video?.youtubeUrl || "");
+          if (!key || seenKeys.has(key)) return false;
+          seenKeys.add(key);
+          return true;
+        })
+        .slice(0, safeCount);
+      if (!videos.length) {
+        throw new Error("Search returned no new direct YouTube video links; trying the next provider.");
+      }
+      return res.json({ success: true, videos, provider: attempt.name });
+    } catch (error) {
+      const message = String(error?.message || "Unknown video search error.");
+      errors.push(`${attempt.name}: ${message}`);
+      console.error(`Study Plan video search ${attempt.name} failed:`, message);
+    }
+  }
+
+  return res.status(502).json({
+    success: false,
+    error: "Could not find more videos right now. Please try again.",
+    details: errors.join(" | "),
+  });
+});
+
+app.post("/api/study-plan/generate", async (req, res) => {
+  try {
+    const {
+      exam = {},
+      durationDays: requestedDuration = 30,
+      studyHoursPerDay: requestedHours = 3,
+      startDate: requestedStartDate,
+    } = req.body || {};
+
+    const examName = String(exam.exam_name || exam.examName || "").trim();
+    if (!examName) {
+      return res.status(400).json({ success: false, error: "Choose an exam before generating a study plan." });
+    }
+
+    const durationDays = Math.floor(Number(requestedDuration));
+    const studyHoursPerDay = Number(requestedHours);
+    if (!Number.isFinite(durationDays) || durationDays < 1 || durationDays > 180) {
+      return res.status(400).json({ success: false, error: "Plan duration must be between 1 and 180 days." });
+    }
+    if (!Number.isFinite(studyHoursPerDay) || studyHoursPerDay < 0.5 || studyHoursPerDay > 12) {
+      return res.status(400).json({ success: false, error: "Daily study time must be between 0.5 and 12 hours." });
+    }
+
+    const startDate = /^\d{4}-\d{2}-\d{2}$/.test(String(requestedStartDate || ""))
+      ? String(requestedStartDate)
+      : new Date().toISOString().slice(0, 10);
+    const examDetails = {
+      exam_name: examName,
+      category: exam.category || "",
+      organization: exam.organization || "",
+      description: exam.description || "",
+      qualification: exam.qualification || "",
+      degree: exam.degree || "",
+      stream: exam.stream || "",
+      application_last_date: exam.application_last_date || "",
+      official_notification_url: exam.official_notification_url || "",
+      official_website_url: exam.official_website_url || "",
+    };
+
+    const geminiPrompt = buildStudyPlanPrompt({ exam: examDetails, durationDays, studyHoursPerDay, startDate });
+    let ollamaSyllabusEvidence = [];
+    const attempts = [
+      {
+        name: "Gemini",
+        flag: STUDY_PLAN_PROVIDER_FLAGS.GEMINI,
+        messages: [
+          { role: "system", content: STUDY_PLAN_SYSTEM_INSTRUCTION },
+          { role: "user", content: geminiPrompt },
+        ],
+        run: (messages, providerTracker) => askGemini(messages, {
+          providerTracker,
+          maxCompletionTokens: 8192,
+          enableGoogleSearch: true,
+          responseMimeType: "application/json",
+        }),
+        webSearchUsed: true,
+      },
+      {
+        name: "Groq",
+        flag: STUDY_PLAN_PROVIDER_FLAGS.GROQ,
+        messages: [
+          { role: "system", content: STUDY_PLAN_SYSTEM_INSTRUCTION },
+          { role: "user", content: geminiPrompt },
+        ],
+        run: (messages, providerTracker) => askGroq(messages, {
+          providerTracker,
+          maxCompletionTokens: 4096,
+          enableBrowserSearch: true,
+        }),
+        webSearchUsed: true,
+      },
+      {
+        name: "Antigravity",
+        flag: STUDY_PLAN_PROVIDER_FLAGS.ANTIGRAVITY,
+        messages: [
+          { role: "system", content: STUDY_PLAN_SYSTEM_INSTRUCTION },
+          { role: "user", content: geminiPrompt },
+        ],
+        run: (messages, providerTracker) => askAntigravityStudyPlan(messages, {
+          providerTracker,
+        }),
+        webSearchUsed: true,
+      },
+      {
+        name: "Ollama Cloud (DeepSeek V4.1 Flash)",
+        flag: STUDY_PLAN_PROVIDER_FLAGS.OLLAMA,
+        isOllama: true,
+        messages: [],
+        run: async (_messages, providerTracker) => {
+          ollamaSyllabusEvidence = await getOllamaOfficialSyllabusEvidence(examDetails);
+          const prompt = buildOllamaRetrievedSyllabusPrompt({
+            exam: examDetails,
+            durationDays,
+            studyHoursPerDay,
+            startDate,
+            sources: ollamaSyllabusEvidence,
+          });
+          return askOllamaStudyPlan([
+            { role: "system", content: OLLAMA_RETRIEVED_SYLLABUS_SYSTEM_INSTRUCTION },
+            { role: "user", content: prompt },
+          ], { providerTracker });
+        },
+        webSearchUsed: false,
+      },
+    ];
+    const providerErrors = [];
+
+    for (const attempt of attempts) {
+      const providerTracker = [];
+      try {
+        const responseText = await attempt.run(attempt.messages, providerTracker);
+        const plan = parseStudyPlanJson(responseText);
+        if (!plan || !Array.isArray(plan.sections)) {
+          throw new Error(`${attempt.name} returned a study plan in an unexpected format.`);
+        }
+        plan.sections = plan.sections.filter((section) => section && String(section.name || "").trim());
+        if (!plan.sections.length) throw new Error(`${attempt.name} returned no syllabus sections.`);
+
+        const providerIndex = attempts.indexOf(attempt);
+        const fallbackUsed = providerIndex > 0;
+        let webSearchUsed = attempt.webSearchUsed;
+        if (attempt.isOllama) {
+          const normalizeEvidence = (value) => String(value || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+          const normalizedName = normalizeEvidence(examDetails.exam_name);
+          const sourceText = normalizeEvidence(ollamaSyllabusEvidence.map((source) => `${source.title} ${source.searchSnippet} ${source.fetchedText}`).join(" "));
+          const exactSourceMatch = normalizedName.length > 0 && sourceText.includes(normalizedName);
+          const modelConfirmsMatch = plan.exactMatch === true
+            && plan.syllabusVerified === true
+            && normalizeEvidence(plan.matchedExamName) === normalizedName
+            && normalizeEvidence(plan.matchedCategory) === normalizeEvidence(examDetails.category);
+          if (!exactSourceMatch || !modelConfirmsMatch) {
+            throw new Error("Ollama Web Search could not verify the exact post and category from an official syllabus source. Add the syllabus manually.");
+          }
+          plan.syllabusVerified = true;
+          plan.exactMatch = true;
+          plan.summary = `${String(plan.summary || "Official syllabus matched.").trim()} Summarized by DeepSeek V4.1 Flash via Ollama Cloud from official source material retrieved with Ollama Web Search.`;
+          plan.sections = plan.sections.map((section) => ({ ...section, sourceType: "official" }));
+          plan.sources = ollamaSyllabusEvidence.map(({ title, url }) => ({ title, url, type: "official" }));
+          plan.videos = [];
+        } else {
+        plan.sources = Array.isArray(plan.sources)
+          ? plan.sources.filter((source) => /^https:\/\//i.test(source?.url || ""))
+          : [];
+        plan.videos = Array.isArray(plan.videos)
+          ? plan.videos.filter((video) => /^https?:\/\/(www\.)?(youtube\.com|youtu\.be)\//i.test(video?.youtubeUrl || ""))
+            .slice(0, 4)
+          : [];
+        }
+
+        if (OLLAMA_API_KEY && plan.sections.length && plan.videos.length < 3) {
+          try {
+            const excludedKeys = new Set(plan.videos.map((video) => youtubeVideoKey(video.youtubeUrl)).filter(Boolean));
+            const supplemental = JSON.parse(await searchOllamaVideos({
+              exam: examDetails,
+              sections: plan.sections,
+              excludedKeys,
+              count: Math.min(4 - plan.videos.length, 4),
+            }));
+            const seenKeys = new Set(excludedKeys);
+            const extraVideos = (Array.isArray(supplemental?.videos) ? supplemental.videos : [])
+              .filter((video) => {
+                const key = youtubeVideoKey(video?.youtubeUrl || "");
+                if (!key || seenKeys.has(key)) return false;
+                seenKeys.add(key);
+                return true;
+              });
+            plan.videos = [...plan.videos, ...extraVideos].slice(0, 4);
+            webSearchUsed = true;
+          } catch (videoSearchError) {
+            console.warn("Ollama Web Search could not supplement initial Study Plan videos:", String(videoSearchError?.message || videoSearchError));
+          }
+        }
+        plan.weeks = buildStudySchedule(plan.sections, durationDays, studyHoursPerDay, startDate);
+        if (!attempt.isOllama) plan.exactMatch = false;
+
+        console.log(`Study Plan generated using ${attempt.name}${fallbackUsed ? " fallback" : " primary"}.`);
+        return res.json({
+          success: true,
+          plan,
+          provider: attempt.name,
+          providerFlag: attempt.flag,
+          fallbackUsed,
+          webSearchUsed,
+          exactMatch: attempt.isOllama && plan.exactMatch === true,
+          needsCustomSyllabus: false,
+          attemptedProviders: attempts.slice(0, providerIndex + 1).map(({ name }) => name),
+          generatedAt: new Date().toISOString(),
+        });
+      } catch (providerError) {
+        const message = String(providerError?.message || "Unknown provider error.");
+        providerErrors.push(`${attempt.name}: ${message}`);
+        console.error(`Study Plan ${attempt.name} failed:`, message);
+        const attemptIndex = attempts.indexOf(attempt);
+        if (attemptIndex < attempts.length - 1) {
+          console.log(`Study Plan switching from ${attempt.name} to ${attempts[attemptIndex + 1].name}...`);
+        }
+      }
+    }
+
+    console.error("All Study Plan providers failed:", providerErrors.join(" | "));
+    return res.json({
+      success: true,
+      plan: {
+        summary: "An exact official syllabus could not be verified for this post. Add the syllabus below to build your timetable manually.",
+        sections: [],
+        weeks: [],
+        videos: [],
+        sources: [],
+        needsCustomSyllabus: true,
+        syllabusVerified: false,
+      },
+      provider: "",
+      providerFlag: "",
+      fallbackUsed: false,
+      webSearchUsed: false,
+      exactMatch: false,
+      needsCustomSyllabus: true,
+      attemptedProviders: attempts.map(({ name }) => name),
+      providerErrors,
+      generatedAt: new Date().toISOString(),
+    });
+  } catch (error) {
+    const providerError = String(error?.message || "Unknown study-plan error.");
+    console.error("Study Plan Generation Error:", providerError);
+    return res.status(502).json({
+      success: false,
+      error: "Study Plan could not be generated. Please retry in a moment.",
+      details: providerError,
+    });
+  }
+});
+
+// ==========================================================
+// QUIZ QUESTION GENERATION AND WRITTEN ANSWER GRADING
+// ==========================================================
+
+app.post("/api/quiz/generate", async (req, res) => {
+  try {
+    const {
+      exams = [],
+      testType = "weekly",
+      scope = "",
+      questionCount: requestedCount = 20,
+      difficulty = "Mixed difficulty",
+      format = "mcq",
+      language = "English",
+      syllabusSections = [],
+      transcripts: requestedTranscripts = [],
+    } = req.body || {};
+
+    const safeExams = (Array.isArray(exams) ? exams : [exams])
+      .filter((exam) => exam && typeof exam === "object")
+      .slice(0, 6)
+      .map((exam) => ({
+        exam_name: String(exam.exam_name || exam.examName || "").trim().slice(0, 240),
+        category: String(exam.category || "").trim().slice(0, 80),
+        organization: String(exam.organization || "").trim().slice(0, 240),
+        qualification: String(exam.qualification || "").trim().slice(0, 1200),
+        description: String(exam.description || "").trim().slice(0, 1800),
+      }))
+      .filter((exam) => exam.exam_name);
+    if (!safeExams.length) return res.status(400).json({ success: false, error: "Select at least one exam before creating a test." });
+
+    const allowedTestTypes = new Set(["weekly", "monthly", "chapter", "topic"]);
+    const allowedFormats = new Set(["mcq", "written", "mixed"]);
+    const safeTestType = allowedTestTypes.has(testType) ? testType : "weekly";
+    const safeFormat = allowedFormats.has(format) ? format : "mcq";
+    const safeLanguage = ["English", "Malayalam"].includes(String(language)) ? String(language) : "English";
+    const questionCount = Math.min(50, Math.max(1, Math.floor(Number(requestedCount) || 20)));
+
+    const safeSections = (Array.isArray(syllabusSections) ? syllabusSections : [])
+      .slice(0, 40)
+      .map((section) => ({
+        name: String(section?.name || "").trim().slice(0, 180),
+        topics: (Array.isArray(section?.topics) ? section.topics : [])
+          .map((topic) => String(topic || "").trim().slice(0, 240))
+          .filter(Boolean)
+          .slice(0, 60),
+      }))
+      .filter((section) => section.name && section.topics.length);
+
+    let transcriptBudget = 85000;
+    const safeTranscripts = (Array.isArray(requestedTranscripts) ? requestedTranscripts : [])
+      .slice(0, 10)
+      .map((transcript) => {
+        const content = String(transcript?.transcript || transcript?.text || "").trim();
+        if (!content || transcriptBudget <= 0) return null;
+        const excerpt = content.slice(0, transcriptBudget);
+        transcriptBudget -= excerpt.length;
+        return {
+          title: String(transcript?.title || "Study video").trim().slice(0, 240),
+          topic: String(transcript?.topic || "").trim().slice(0, 180),
+          videoUrl: youtubeVideoKey(transcript?.videoUrl || transcript?.url || "")
+            ? String(transcript?.videoUrl || transcript?.url || "").slice(0, 500)
+            : "",
+          transcript: excerpt,
+        };
+      })
+      .filter(Boolean);
+
+    const hasSyllabus = safeSections.length > 0;
+    const hasTranscript = safeTranscripts.length > 0;
+    if (!hasSyllabus && !hasTranscript) {
+      return res.status(400).json({ success: false, error: "Add syllabus topics or select studied videos with available transcripts." });
+    }
+
+    const prompt = buildQuizGenerationPrompt({
+      exams: safeExams,
+      testType: safeTestType,
+      scope: String(scope || "").slice(0, 300),
+      questionCount,
+      difficulty: String(difficulty || "Mixed difficulty").slice(0, 80),
+      format: safeFormat,
+      language: safeLanguage,
+      syllabusSections: safeSections,
+      transcripts: safeTranscripts,
+    });
+    const { payload, provider } = await runQuizGenerationWithFallback([
+      { role: "system", content: QUIZ_GENERATION_SYSTEM_INSTRUCTION },
+      { role: "user", content: prompt },
+    ], safeFormat, questionCount);
+    const questions = normalizeQuizQuestions(payload, safeFormat, questionCount);
+    return res.json({
+      success: true,
+      questions,
+      provider,
+      language: safeLanguage,
+      sourcesUsed: {
+        syllabusSections: safeSections.length,
+        videoTranscripts: safeTranscripts.length,
+      },
+    });
+  } catch (error) {
+    const details = String(error?.message || "Unknown quiz generation error.");
+    console.error("Quiz generation failed:", details);
+    return res.status(502).json({ success: false, error: "Could not generate a valid mock test. Please try again or select different sources.", details });
+  }
+});
+
+async function askGeminiQuizGrade(prompt, image) {
+  if (!GEMINI_API_KEY || !gemini) throw new Error("GEMINI_API_KEY is missing.");
+  const contents = image
+    ? [{ role: "user", parts: [{ text: prompt }, { inlineData: { mimeType: image.mimeType, data: image.base64 } }] }]
+    : prompt;
+  const response = await gemini.models.generateContent({
+    model: GEMINI_MODEL,
+    contents,
+    config: { systemInstruction: QUIZ_GRADING_SYSTEM_INSTRUCTION, maxOutputTokens: 2048, responseMimeType: "application/json" },
+  });
+  if (!response?.text) throw new Error("Gemini returned an empty grading response.");
+  return response.text.trim();
+}
+
+app.post("/api/quiz/grade-written", async (req, res) => {
+  try {
+    const { question = {}, answerText = "", imageBase64 = "" } = req.body || {};
+    const safeAnswer = String(answerText || "").trim().slice(0, 12000);
+    const image = getQuizImage(imageBase64);
+    if (!safeAnswer && !image) return res.status(400).json({ success: false, error: "Type an answer or upload a photo before requesting feedback." });
+    if (!String(question?.text || "").trim() || !String(question?.answer || "").trim()) {
+      return res.status(400).json({ success: false, error: "This written question is missing its model answer or rubric." });
+    }
+
+    const prompt = buildQuizGradingPrompt({ question, answerText: safeAnswer });
+    const gradingMessages = [
+      { role: "system", content: QUIZ_GRADING_SYSTEM_INSTRUCTION },
+      { role: "user", content: prompt, ...(image ? { images: [image.base64] } : {}) },
+    ];
+    const attempts = [];
+    if (!image && !IS_VERCEL && OLLAMA_MODEL) {
+      attempts.push({ name: "Local Ollama", run: () => askOllama(gradingMessages, { maxCompletionTokens: 2048 }) });
+    }
+    attempts.push({
+      name: "DeepSeek V4.1 Flash via Ollama Cloud",
+      run: () => askOllamaStudyPlan(gradingMessages),
+    });
+    attempts.push({ name: "Gemini", run: () => askGeminiQuizGrade(prompt, image) });
+    if (!image) attempts.push({ name: "Groq", run: () => askGroq(gradingMessages, { maxCompletionTokens: 2048 }) });
+
+    const errors = [];
+    for (const attempt of attempts) {
+      try {
+        const grade = parseQuizGrade(await attempt.run());
+        if (image && !grade.extractedText) throw new Error("The image text could not be read reliably. Please type your answer or upload a clearer photo.");
+        return res.json({ success: true, ...grade, provider: attempt.name });
+      } catch (error) {
+        const message = String(error?.message || "Unknown grading error.");
+        errors.push(`${attempt.name}: ${message}`);
+        console.error(`Written answer grading with ${attempt.name} failed:`, message);
+      }
+    }
+    throw new Error(errors.join(" | "));
+  } catch (error) {
+    const details = String(error?.message || "Unknown written-answer grading error.");
+    console.error("Written answer grading failed:", details);
+    const status = details.startsWith("Upload an") || details.startsWith("The answer photo") ? 400 : 502;
+    return res.status(status).json({ success: false, error: "Could not grade this written answer.", details });
+  }
+});
 
 // ==========================================================
 // HEALTH CHECK

@@ -3,10 +3,8 @@
 // =========================================================
 
 const DB_NAME = 'SmartDocAI_DB'
-const DB_VERSION = 1
+const DB_VERSION = 2
 const STORE_NAME = 'pdfs'
-
-const MAX_PDFS = 10
 
 
 // =========================================================
@@ -29,7 +27,6 @@ const openDatabase = () => {
 
 
       if (!db.objectStoreNames.contains(STORE_NAME)) {
-
         const store =
           db.createObjectStore(
             STORE_NAME,
@@ -46,7 +43,20 @@ const openDatabase = () => {
             unique: false
           }
         )
+      } else if (event.oldVersion < 2) {
+        const store = event.target.transaction.objectStore(STORE_NAME)
+        const cursorRequest = store.openCursor()
 
+        cursorRequest.onsuccess = () => {
+          const cursor = cursorRequest.result
+          if (!cursor) return
+
+          const existing = cursor.value
+          if (typeof existing.bookmarked !== 'boolean') {
+            cursor.update({ ...existing, bookmarked: false })
+          }
+          cursor.continue()
+        }
       }
 
     }
@@ -80,9 +90,12 @@ export const savePDF = async ({
   blob,
   title,
   category = 'Other',
+  examName = 'General',
+  examId = '',
   sourceUrl = '',
   summaryType = '',
-  language = ''
+  language = '',
+  bookmarked = false
 }) => {
 
   if (!(blob instanceof Blob)) {
@@ -113,119 +126,65 @@ export const savePDF = async ({
           STORE_NAME
         )
 
+      const id =
+        `${Date.now()}-${Math.random()
+          .toString(36)
+          .substring(2, 9)}`
 
-      const countRequest =
-        store.count()
+      const pdfData = {
+        id,
+        title: title || 'SmartDoc AI Summary',
+        category: category || 'Other',
+        examName: examName || 'General',
+        examId: examId || '',
+        sourceUrl: sourceUrl || '',
+        summaryType: summaryType || '',
+        language: language || '',
+        bookmarked,
+        createdAt: new Date().toISOString(),
+        size: blob.size,
+        mimeType: blob.type || 'application/pdf',
+        blob
+      }
 
-
-      countRequest.onsuccess =
-        () => {
-
-          const count =
-            countRequest.result
-
-
-          if (
-            count >= MAX_PDFS
-          ) {
-
-            reject(
-              new Error(
-                `Downloads limit reached. You can store a maximum of ${MAX_PDFS} PDFs. Please delete an existing PDF first.`
-              )
-            )
-
-            return
-
-          }
-
-
-          const id =
-            `${Date.now()}-${Math.random()
-              .toString(36)
-              .substring(2, 9)}`
-
-
-          const pdfData = {
-
-            id,
-
-            title:
-              title ||
-              'SmartDoc AI Summary',
-
-            category:
-              category ||
-              'Other',
-
-            sourceUrl:
-              sourceUrl ||
-              '',
-
-            summaryType:
-              summaryType ||
-              '',
-
-            language:
-              language ||
-              '',
-
-            createdAt:
-              new Date().toISOString(),
-
-            size:
-              blob.size,
-
-            mimeType:
-              blob.type ||
-              'application/pdf',
-
-            blob
-
-          }
-
-
-          const request =
-            store.add(
-              pdfData
-            )
-
-
-          request.onsuccess =
-            () => {
-
-              resolve(
-                pdfData
-              )
-
-            }
-
-
-          request.onerror =
-            () => {
-
-              reject(
-                request.error
-              )
-
-            }
-
-        }
-
-
-      countRequest.onerror =
-        () => {
-
-          reject(
-            countRequest.error
-          )
-
-        }
+      const request = store.add(pdfData)
+      request.onerror = () => reject(request.error)
+      transaction.oncomplete = () => resolve(pdfData)
+      transaction.onabort = () => reject(transaction.error || new Error('Unable to save the PDF in local storage.'))
 
     }
 
   )
 
+}
+
+
+export const updatePDF = async (id, updates) => {
+  const db = await openDatabase()
+
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(STORE_NAME, 'readwrite')
+    const store = transaction.objectStore(STORE_NAME)
+    const request = store.get(id)
+    let updatedPDF = null
+    let operationError = null
+
+    request.onsuccess = () => {
+      if (!request.result) {
+        operationError = new Error('The saved PDF could not be found.')
+        transaction.abort()
+        return
+      }
+
+      updatedPDF = { ...request.result, ...updates, id }
+      const updateRequest = store.put(updatedPDF)
+      updateRequest.onerror = () => { operationError = updateRequest.error }
+    }
+
+    request.onerror = () => { operationError = request.error }
+    transaction.oncomplete = () => resolve(updatedPDF)
+    transaction.onabort = () => reject(operationError || transaction.error || new Error('Unable to update the saved PDF.'))
+  })
 }
 
 
@@ -298,6 +257,8 @@ export const getPDFs = async () => {
   )
 
 }
+
+export const getAllPDFs = getPDFs;
 
 
 // =========================================================
@@ -511,12 +472,7 @@ export const formatPDFSize =
 
 
 // =========================================================
-// MAXIMUM STORAGE LIMIT
+// No fixed application-level limit; IndexedDB quota is browser-managed.
 // =========================================================
 
-export const getPDFLimit =
-  () => {
-
-    return MAX_PDFS
-
-  }
+export const getPDFLimit = () => null

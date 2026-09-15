@@ -1,0 +1,42 @@
+.sd-settings-page { min-height: 100vh; padding: 38px 18px 60px; background: #f5f7fc; color: #202a44; }
+.sd-settings-shell { width: min(760px, 100%); margin: 0 auto; }
+.sd-settings-header { display: flex; align-items: flex-start; gap: 16px; margin: 0 0 26px; }
+.sd-settings-back { display: grid; width: 42px; height: 42px; flex: 0 0 auto; place-items: center; border: 1px solid #e1e6f0; border-radius: 13px; background: #fff; color: #3b4a67; font-size: 1.1rem; cursor: pointer; }
+.sd-settings-eyebrow { color: #5b63dc; font-size: .67rem; font-weight: 850; letter-spacing: .14em; }
+.sd-settings-header h1 { margin: 3px 0 5px; color: #5b63dc; font-size: clamp(1.65rem, 5vw, 2.1rem); letter-spacing: -.04em; }
+.sd-settings-header p, .sd-settings-card-heading p { color: #77819a; font-size: .85rem; }
+.sd-settings-card { margin-bottom: 15px; padding: 22px; border: 1px solid #e6eaf2; border-radius: 20px; background: #fff; box-shadow: 0 10px 28px rgba(28, 42, 77, .045); }
+.sd-settings-card-heading { display: flex; align-items: center; gap: 12px; margin-bottom: 19px; color: #555de0; }
+.sd-settings-card-heading > svg, .sd-settings-language-icon, .sd-settings-reminder-icon { display: grid; width: 42px; height: 42px; flex: 0 0 auto; place-items: center; border-radius: 13px; background: #f0f0ff; font-size: 1rem; }
+.sd-settings-language-icon, .sd-settings-reminder-icon { font-weight: 800; }
+.sd-settings-card-heading h2 { margin: 0 0 4px; color: #25304c; font-size: 1rem; }
+.sd-theme-options { display: grid; grid-template-columns: repeat(3, 1fr); gap: 9px; margin-bottom: 14px; }
+.sd-theme-option { position: relative; display: flex; min-height: 54px; align-items: center; justify-content: center; gap: 8px; border: 1px solid #e3e7f0; border-radius: 12px; background: #fff; color: #56617c; font: inherit; font-size: .82rem; font-weight: 750; cursor: pointer; }
+.sd-theme-option.selected { border-color: #7068e9; background: #f4f3ff; color: #5149cf; }
+.sd-theme-check { position: absolute; top: 6px; right: 7px; font-size: .72rem; }
+.sd-settings-toggle { position: relative; display: flex; min-height: 62px; align-items: center; justify-content: space-between; gap: 20px; border-top: 1px solid #eef0f5; cursor: pointer; }
+.sd-settings-toggle > span:first-child { display: grid; gap: 4px; }
+.sd-settings-toggle strong { color: #303b57; font-size: .84rem; }
+.sd-settings-toggle small { max-width: 520px; color: #7a849b; font-size: .73rem; line-height: 1.5; }
+.sd-settings-toggle input { position: absolute; right: 0; width: 44px; height: 26px; opacity: 0; cursor: pointer; }
+.sd-settings-switch { position: relative; width: 44px; height: 26px; flex: 0 0 auto; border-radius: 99px; background: #d7dce7; transition: background .2s ease; }
+.sd-settings-switch::after { position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: white; box-shadow: 0 1px 4px #22334433; content: ''; transition: transform .2s ease; }
+.sd-settings-toggle input:checked + .sd-settings-switch { background: #5d57df; }
+.sd-settings-toggle input:checked + .sd-settings-switch::after { transform: translateX(18px); }
+.sd-settings-toggle input:focus-visible + .sd-settings-switch { outline: 3px solid #aaa6ff; outline-offset: 3px; }
+.sd-settings-field { display: grid; gap: 8px; color: #394560; font-size: .8rem; font-weight: 750; }
+.sd-settings-field select { width: 100%; min-height: 45px; padding: 0 12px; border: 1px solid #dfe4ee; border-radius: 11px; background: #fff; color: #34405a; font: inherit; }
+.sd-settings-note { margin-top: 10px; color: #7c869c; font-size: .72rem; line-height: 1.55; }
+.sd-settings-save-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 8px 2px; }
+.sd-settings-save-row p { color: #768099; font-size: .75rem; }
+.sd-settings-save { min-height: 43px; padding: 0 18px; border: 0; border-radius: 12px; background: linear-gradient(110deg,#655ff0,#5148d4); color: #fff; font: inherit; font-size: .82rem; font-weight: 800; box-shadow: 0 6px 16px #554ce633; cursor: pointer; }
+html[data-smartdoc-theme="dark"] .sd-settings-page { background: #111827; color: #e5e9f3; }
+html[data-smartdoc-theme="dark"] .sd-settings-card, html[data-smartdoc-theme="dark"] .sd-settings-back { border-color: #303b50; background: #1b2536; }
+html[data-smartdoc-theme="dark"] .sd-settings-header h1, html[data-smartdoc-theme="dark"] .sd-settings-card-heading h2, html[data-smartdoc-theme="dark"] .sd-settings-toggle strong { color: #edf1fb; }
+html[data-smartdoc-theme="dark"] .sd-settings-toggle { border-color: #303b50; }
+html[data-smartdoc-theme="dark"] .sd-theme-option, html[data-smartdoc-theme="dark"] .sd-settings-field select { border-color: #3a465e; background: #182235; color: #e2e8f4; }
+html[data-smartdoc-theme="dark"] .sd-theme-option.selected { background: #2c2c56; }
+html[data-smartdoc-compact="true"] .sd-settings-card { padding: 17px; }
+html[data-smartdoc-compact="true"] .sd-home-page .sd-panel, html[data-smartdoc-compact="true"] .sp-page .sp-section, html[data-smartdoc-compact="true"] .sd-profile-page .sd-profile-menu-item { padding-top: 13px; padding-bottom: 13px; }
+html[data-smartdoc-reduce-motion="true"] *, html[data-smartdoc-reduce-motion="true"] *::before, html[data-smartdoc-reduce-motion="true"] *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+@media (max-width: 540px) { .sd-settings-page { padding: 23px 13px 40px; } .sd-settings-card { padding: 17px; border-radius: 16px; } .sd-settings-save-row { align-items: flex-start; flex-direction: column; } .sd-settings-save { width: 100%; } .sd-theme-option { gap: 5px; font-size: .73rem; } }

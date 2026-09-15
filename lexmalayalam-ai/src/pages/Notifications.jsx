@@ -1156,11 +1156,19 @@ export default function Notifications() {
   };
   const toggleReminder = (notificationId, examName, exam) => {
     const isAlreadySet = reminders.includes(notificationId);
-    setReminders((previous) => toggleReminderId(previous, notificationId));
-
     if (isAlreadySet) {
-      showToast(`Reminder removed for ${examName}`);
+      showToast(`Opening the study plan for ${examName}…`);
+      navigate('/study-plan', { state: { exam } });
       return;
+    }
+
+    const nextReminders = toggleReminderId(reminders, notificationId);
+    setReminders(nextReminders);
+    try {
+      // Persist before navigating so the planner immediately sees this reminder.
+      localStorage.setItem(STORAGE_REMINDERS_KEY, JSON.stringify(nextReminders));
+    } catch (error) {
+      console.error('Could not save reminders to localStorage', error);
     }
 
     showToast(`Reminder set for ${examName}! Opening your study planner…`);

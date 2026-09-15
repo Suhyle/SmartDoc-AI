@@ -1,0 +1,1000 @@
+/* =========================================================
+   SMARTDOC AI — EXAM NOTIFICATIONS STYLES
+   Prefix: .sd-notif-
+   Designed for local Vite, Vercel, and Capacitor Android
+========================================================= */
+
+:root {
+  --sd-notif-primary: #6366f1;
+  --sd-notif-primary-dark: #4f46e5;
+  --sd-notif-primary-soft: #f3eeff;
+  --sd-notif-text-dark: #1e293b;
+  --sd-notif-text-muted: #64748b;
+  --sd-notif-bg: #f8fafc;
+  --sd-notif-card-bg: #ffffff;
+  --sd-notif-border: #e2e8f0;
+  --sd-notif-red: #ef4444;
+  --sd-notif-amber: #f59e0b;
+  --sd-notif-green: #10b981;
+}
+
+.sd-notif-page {
+  min-height: 100vh;
+  width: 100%;
+  background: var(--sd-notif-bg);
+  color: var(--sd-notif-text-dark);
+  font-family: 'Poppins', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  box-sizing: border-box;
+  padding-bottom: 60px;
+}
+
+.sd-notif-page *,
+.sd-notif-page *::before,
+.sd-notif-page *::after {
+  box-sizing: border-box;
+}
+
+.sd-notif-container {
+  width: min(1320px, calc(100% - 32px));
+  margin: 0 auto;
+  padding-top: 16px;
+}
+
+/* =========================================================
+   1. BRAND HEADER
+========================================================= */
+
+.sd-notif-brand-header {
+  min-height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.sd-notif-brand-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.sd-notif-logo-box {
+  width: 38px;
+  height: 38px;
+  border-radius: 11px;
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.25);
+}
+
+.sd-notif-brand-text-group {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.sd-notif-brand-title {
+  font-size: 1.15rem;
+  font-weight: 850;
+  color: var(--sd-notif-text-dark);
+  letter-spacing: -0.3px;
+  line-height: 1.1;
+}
+
+.sd-notif-brand-ai {
+  color: var(--sd-notif-primary);
+}
+
+.sd-notif-brand-tagline {
+  font-size: 0.68rem;
+  color: var(--sd-notif-text-muted);
+  font-weight: 600;
+}
+
+.sd-notif-brand-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.sd-notif-icon-btn {
+  width: 40px;
+  height: 40px;
+  border: 1px solid var(--sd-notif-border);
+  border-radius: 11px;
+  background: #ffffff;
+  color: var(--sd-notif-text-dark);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  position: relative;
+  transition: all 0.2s ease;
+}
+
+.sd-notif-icon-btn:hover {
+  color: var(--sd-notif-primary);
+  border-color: rgba(99, 102, 241, 0.4);
+  transform: translateY(-1px);
+}
+
+.sd-notif-badge-dot {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 17px;
+  height: 17px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--sd-notif-red);
+  color: #ffffff;
+  font-size: 0.6rem;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid #ffffff;
+}
+
+.sd-notif-avatar-btn {
+  background: var(--sd-notif-primary-soft);
+  color: var(--sd-notif-primary-dark);
+}
+
+/* =========================================================
+   2. HERO BANNER
+========================================================= */
+
+.sd-notif-hero {
+  position: relative;
+  background: linear-gradient(135deg, #ede9fe 0%, #e0e7ff 50%, #f3e8ff 100%);
+  border: 1px solid rgba(139, 92, 246, 0.2);
+  border-radius: 24px;
+  padding: 28px 32px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  overflow: hidden;
+  box-shadow: 0 8px 24px rgba(99, 102, 241, 0.08);
+  margin-bottom: 24px;
+}
+
+.sd-notif-hero-content {
+  flex: 1;
+  max-width: 680px;
+  z-index: 2;
+}
+
+.sd-notif-hero-tag {
+  display: inline-block;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.8px;
+  color: var(--sd-notif-primary-dark);
+  text-transform: uppercase;
+  margin-bottom: 6px;
+}
+
+.sd-notif-hero-title {
+  margin: 0 0 8px;
+  font-size: clamp(1.65rem, 3vw, 2.3rem);
+  font-weight: 850;
+  color: #1e1b4b;
+  letter-spacing: -0.6px;
+  line-height: 1.15;
+}
+
+.sd-notif-hero-subtitle {
+  margin: 0 0 20px;
+  font-size: 0.92rem;
+  line-height: 1.5;
+  color: #4338ca;
+  font-weight: 500;
+}
+
+.sd-notif-hero-action-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.sd-notif-find-btn {
+  height: 48px;
+  padding: 0 24px;
+  border: none;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+  color: #ffffff;
+  font-size: 0.92rem;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  cursor: pointer;
+  box-shadow: 0 8px 20px rgba(79, 70, 229, 0.35);
+  transition: all 0.2s ease;
+}
+
+.sd-notif-find-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 24px rgba(79, 70, 229, 0.45);
+}
+
+.sd-notif-find-btn:disabled {
+  opacity: 0.75;
+  cursor: wait;
+}
+
+.sd-notif-btn-arrow {
+  transition: transform 0.2s ease;
+}
+
+.sd-notif-find-btn:hover .sd-notif-btn-arrow {
+  transform: translateX(3px);
+}
+
+.sd-notif-qual-pill {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 8px 14px;
+  max-width: 100%;
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(99, 102, 241, 0.25);
+  border-radius: 14px;
+  font-size: 0.76rem;
+  font-weight: 700;
+  line-height: 1.5;
+  color: #3730a3;
+}
+
+/* Vector Document Illustration Graphic */
+.sd-notif-hero-graphic {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1;
+}
+
+.sd-notif-doc-shape {
+  position: relative;
+  width: 90px;
+  height: 110px;
+  background: #ffffff;
+  border-radius: 12px;
+  box-shadow: 0 12px 28px rgba(99, 102, 241, 0.18);
+  padding: 16px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  transform: rotate(4deg);
+}
+
+.sd-notif-doc-line {
+  height: 6px;
+  border-radius: 3px;
+  background: #c7d2fe;
+}
+
+.sd-notif-doc-line.short {
+  width: 65%;
+  background: #a5b4fc;
+}
+
+.sd-notif-bell-badge {
+  position: absolute;
+  bottom: -10px;
+  right: -10px;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: #fef3c7;
+  border: 2px solid #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 6px 16px rgba(245, 158, 11, 0.3);
+}
+
+/* =========================================================
+   3. SEARCH & FILTERS
+========================================================= */
+
+.sd-notif-filter-section {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.sd-notif-search-wrapper {
+  position: relative;
+  width: 100%;
+  display: flex;
+  align-items: center;
+}
+
+.sd-notif-search-icon {
+  position: absolute;
+  left: 16px;
+  color: var(--sd-notif-text-muted);
+  pointer-events: none;
+}
+
+.sd-notif-search-input {
+  width: 100%;
+  height: 48px;
+  padding: 0 42px 0 46px;
+  border: 1px solid var(--sd-notif-border);
+  border-radius: 14px;
+  background: #ffffff;
+  color: var(--sd-notif-text-dark);
+  font-size: 0.9rem;
+  outline: none;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.03);
+  transition: all 0.2s ease;
+}
+
+.sd-notif-search-input:focus {
+  border-color: var(--sd-notif-primary);
+  box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.12);
+}
+
+.sd-notif-search-clear {
+  position: absolute;
+  right: 14px;
+  border: none;
+  background: #f1f5f9;
+  color: var(--sd-notif-text-muted);
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+}
+
+.sd-notif-category-pills {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  scrollbar-width: thin;
+}
+
+.sd-notif-pill {
+  height: 42px;
+  padding: 0 16px;
+  border: 1px solid var(--sd-notif-border);
+  border-radius: 999px;
+  background: #ffffff;
+  color: var(--sd-notif-text-dark);
+  font-size: 0.84rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s ease;
+}
+
+.sd-notif-pill:hover {
+  background: var(--sd-notif-bg);
+  border-color: #cbd5e1;
+}
+
+.sd-notif-pill.active {
+  background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+  color: #ffffff;
+  border-color: transparent;
+  box-shadow: 0 4px 14px rgba(99, 102, 241, 0.3);
+}
+
+.sd-notif-pill-icon {
+  opacity: 0.85;
+}
+
+.sd-notif-pill-count {
+  font-size: 0.75rem;
+  opacity: 0.8;
+  font-weight: 600;
+}
+
+/* =========================================================
+   4. NOTIFICATION SECTIONS & CARDS GRID
+========================================================= */
+
+.sd-notif-sections-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+
+.sd-notif-category-section {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.sd-notif-category-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.sd-notif-category-title-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.sd-notif-category-icon-box {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.sd-notif-category-title {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 850;
+  color: var(--sd-notif-text-dark);
+}
+
+.sd-notif-cat-count {
+  color: var(--sd-notif-text-muted);
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.sd-notif-view-all-link {
+  border: none;
+  background: transparent;
+  color: var(--sd-notif-primary);
+  font-size: 0.82rem;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+  transition: transform 0.2s ease;
+}
+
+.sd-notif-view-all-link:hover {
+  text-decoration: underline;
+  transform: translateX(2px);
+}
+
+.sd-notif-cards-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 16px;
+}
+
+/* =========================================================
+   5. NOTIFICATION CARD
+========================================================= */
+
+.sd-notif-card {
+  background: #ffffff;
+  border: 1px solid var(--sd-notif-border);
+  border-radius: 18px;
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  position: relative;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.04);
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.sd-notif-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 10px 25px rgba(99, 102, 241, 0.1);
+  border-color: rgba(99, 102, 241, 0.35);
+}
+
+.sd-notif-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.sd-notif-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 10px;
+  border-radius: 8px;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+}
+
+.sd-notif-card-arrow {
+  color: #94a3b8;
+}
+
+.sd-notif-card-title-block {
+  margin-bottom: 12px;
+}
+
+.sd-notif-exam-name {
+  margin: 0 0 3px;
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: var(--sd-notif-text-dark);
+  line-height: 1.25;
+}
+
+.sd-notif-org-name {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--sd-notif-text-muted);
+  font-weight: 500;
+}
+
+.sd-notif-description {
+  margin: 0 0 12px;
+  font-size: 0.78rem;
+  line-height: 1.4;
+  color: #475569;
+}
+
+.sd-notif-details-list {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 10px 12px;
+  background: #f8fafc;
+  border-radius: 12px;
+  border: 1px solid #f1f5f9;
+  margin-bottom: 16px;
+}
+
+.sd-notif-detail-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 0.78rem;
+  color: #334155;
+  line-height: 1.35;
+}
+
+.sd-notif-detail-icon {
+  color: var(--sd-notif-text-muted);
+  margin-top: 1px;
+  flex-shrink: 0;
+}
+
+.sd-notif-detail-text {
+  flex: 1;
+}
+
+.sd-notif-detail-text strong {
+  color: var(--sd-notif-text-dark);
+}
+
+.sd-notif-highlight-date .date-icon {
+  color: var(--sd-notif-red);
+}
+
+.sd-notif-date-val {
+  color: var(--sd-notif-red);
+  font-weight: 800;
+}
+
+.sd-notif-sub-detail {
+  padding-left: 23px;
+  font-size: 0.72rem;
+  color: var(--sd-notif-text-muted);
+}
+
+/* Actions Footer */
+
+.sd-notif-card-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: auto;
+}
+
+.sd-notif-official-btn {
+  width: 100%;
+  height: 40px;
+  border: none;
+  border-radius: 11px;
+  background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+  color: #ffffff;
+  font-size: 0.82rem;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 10px rgba(99, 102, 241, 0.2);
+}
+
+.sd-notif-official-btn:hover {
+  opacity: 0.95;
+  transform: translateY(-1px);
+}
+
+.sd-notif-reminder-btn {
+  width: 100%;
+  height: 38px;
+  border: 1px solid var(--sd-notif-border);
+  border-radius: 11px;
+  background: #ffffff;
+  color: var(--sd-notif-text-dark);
+  font-size: 0.8rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.sd-notif-reminder-btn:hover {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+}
+
+.sd-notif-reminder-btn.active {
+  background: #fef3c7;
+  border-color: #fde68a;
+  color: #b45309;
+}
+
+.bell-active-icon {
+  color: #d97706;
+}
+
+/* =========================================================
+   6. CATEGORY ACCENT COLOR SCHEMES
+========================================================= */
+
+/* PSC */
+.sd-notif-accent-psc .sd-notif-badge,
+.sd-notif-accent-psc.sd-notif-category-icon-box {
+  background: #f3e8ff;
+  color: #7c3aed;
+}
+
+/* SSC */
+.sd-notif-accent-ssc .sd-notif-badge,
+.sd-notif-accent-ssc.sd-notif-category-icon-box {
+  background: #dbeafe;
+  color: #2563eb;
+}
+
+/* Railway */
+.sd-notif-accent-railway .sd-notif-badge,
+.sd-notif-accent-railway.sd-notif-category-icon-box {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+/* UPSC */
+.sd-notif-accent-upsc .sd-notif-badge,
+.sd-notif-accent-upsc.sd-notif-category-icon-box {
+  background: #d1fae5;
+  color: #059669;
+}
+
+/* Banking */
+.sd-notif-accent-bank .sd-notif-badge,
+.sd-notif-accent-bank.sd-notif-category-icon-box {
+  background: #fef3c7;
+  color: #d97706;
+}
+
+/* Other */
+.sd-notif-accent-other .sd-notif-badge,
+.sd-notif-accent-other.sd-notif-category-icon-box {
+  background: #f1f5f9;
+  color: #475569;
+}
+
+/* =========================================================
+   7. STATES & FEEDBACK
+========================================================= */
+
+.sd-notif-error-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 18px;
+  border-radius: 14px;
+  background: #fee2e2;
+  border: 1px solid #fecaca;
+  color: #991b1b;
+  font-size: 0.88rem;
+  font-weight: 600;
+  margin-bottom: 20px;
+}
+
+.sd-notif-retry-btn {
+  margin-left: auto;
+  padding: 4px 12px;
+  border-radius: 8px;
+  border: 1px solid #f87171;
+  background: #ffffff;
+  color: #991b1b;
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.sd-notif-empty-card {
+  padding: 48px 24px;
+  background: #ffffff;
+  border: 1px dashed var(--sd-notif-border);
+  border-radius: 20px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.sd-notif-empty-icon {
+  color: var(--sd-notif-text-muted);
+  margin-bottom: 12px;
+}
+
+.sd-notif-empty-card h3 {
+  margin: 0 0 6px;
+  font-size: 1.1rem;
+  color: var(--sd-notif-text-dark);
+}
+
+.sd-notif-empty-card p {
+  margin: 0 0 16px;
+  font-size: 0.84rem;
+  color: var(--sd-notif-text-muted);
+}
+
+.sd-notif-reset-btn {
+  padding: 8px 16px;
+  border: 1px solid var(--sd-notif-border);
+  border-radius: 10px;
+  background: var(--sd-notif-bg);
+  color: var(--sd-notif-primary);
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.sd-notif-toast {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 999;
+  background: #1e293b;
+  color: #ffffff;
+  padding: 12px 18px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+  animation: sdNotifSlideUp 0.3s ease;
+}
+
+@keyframes sdNotifSlideUp {
+  from {
+    opacity: 0;
+    transform: translateY(15px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Skeleton Loading Cards */
+.sd-notif-loading-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 16px;
+}
+
+.sd-notif-skeleton-card {
+  min-height: 240px;
+}
+
+.sd-notif-skeleton-top {
+  height: 24px;
+  width: 40%;
+  background: #e2e8f0;
+  border-radius: 6px;
+  animation: sdNotifPulse 1.5s infinite;
+}
+
+.sd-notif-skeleton-line {
+  height: 16px;
+  width: 100%;
+  background: #edf2f7;
+  border-radius: 4px;
+  margin-top: 12px;
+  animation: sdNotifPulse 1.5s infinite;
+}
+
+.sd-notif-skeleton-line.short {
+  width: 60%;
+}
+
+.sd-notif-skeleton-button {
+  height: 40px;
+  width: 100%;
+  background: #e2e8f0;
+  border-radius: 11px;
+  margin-top: auto;
+  animation: sdNotifPulse 1.5s infinite;
+}
+
+@keyframes sdNotifPulse {
+  0% { opacity: 0.6; }
+  50% { opacity: 1; }
+  100% { opacity: 0.6; }
+}
+
+/* =========================================================
+   8. RESPONSIVE BREAKPOINTS
+========================================================= */
+
+@media (max-width: 900px) {
+  .sd-notif-hero {
+    padding: 24px;
+  }
+  .sd-notif-hero-graphic {
+    display: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .sd-notif-container {
+    width: calc(100% - 24px);
+    padding-top: 10px;
+  }
+
+  .sd-notif-hero {
+    padding: 20px 18px;
+    border-radius: 18px;
+  }
+
+  .sd-notif-hero-title {
+    font-size: 1.5rem;
+  }
+
+  .sd-notif-hero-subtitle {
+    font-size: 0.84rem;
+    margin-bottom: 16px;
+  }
+
+  .sd-notif-find-btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .sd-notif-cards-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .sd-notif-toast {
+    left: 16px;
+    right: 16px;
+    bottom: 16px;
+    justify-content: center;
+  }
+}
+
+@media (max-width: 400px) {
+  .sd-notif-brand-tagline {
+    display: none;
+  }
+
+  .sd-notif-pill {
+    padding: 0 12px;
+    font-size: 0.78rem;
+  }
+}
+
+/* =========================================================
+   QUALIFICATION MATCHING — NEW STYLES
+   (Appended for Find Exam For Me feature)
+========================================================= */
+
+/* Mode toggle for All Notifications vs Find Exam For Me */
+.sd-notif-find-btn.secondary-mode {
+  background: #fff;
+  color: var(--sd-notif-primary);
+  border: 2px solid var(--sd-notif-primary);
+  font-weight: 600;
+}
+
+.sd-notif-find-btn.secondary-mode:hover {
+  background: var(--sd-notif-primary-soft);
+}
+
+.sd-notif-find-btn.active-mode {
+  background: var(--sd-notif-primary);
+  color: #fff;
+  border: 2px solid var(--sd-notif-primary);
+}
+
+/* Eligibility tag shown on card header */
+.sd-notif-eligibility-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.sd-notif-eligibility-tag.unknown {
+  background: #fff7ed;
+  color: #b45309;
+  border: 1px solid #fed7aa;
+}
+
+/* No qualification profile inline warning */
+.sd-notif-no-profile-warning {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+  font-size: 0.82rem;
+  color: #b45309;
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  border-radius: 8px;
+  padding: 6px 12px;
+}
+
+.sd-notif-setup-profile-link {
+  background: none;
+  border: none;
+  color: var(--sd-notif-primary);
+  font-weight: 700;
+  cursor: pointer;
+  padding: 0;
+  font-size: 0.82rem;
+  text-decoration: underline;
+}
+
+/* Note shown under "Eligibility Details Unavailable" section header */
+.sd-notif-eligibility-note {
+  font-size: 0.83rem;
+  color: var(--sd-notif-text-muted);
+  margin: -8px 0 16px;
+  padding: 0 4px;
+  line-height: 1.5;
+}

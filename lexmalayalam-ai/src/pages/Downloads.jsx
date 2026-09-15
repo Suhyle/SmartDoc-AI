@@ -23,7 +23,6 @@ import {
   FiEye,
   FiDownload,
   FiTrash2,
-  FiMoreVertical,
   FiHome,
   FiPlus,
   FiUser,
@@ -36,8 +35,11 @@ import {
   getPDFs,
   getPDF,
   deletePDF,
+  updatePDF,
   formatPDFSize
 } from '../services/pdfStorage'
+import { getExamCategory, getExamSubfolderName, uniqueExamFolders } from '../utils/examFolders'
+import { getCustomDocumentFolders } from '../utils/documentFolders'
 
 import './Downloads.css'
 import './Home.css'
@@ -59,6 +61,8 @@ export default function Downloads() {
   // =========================================================
 
   const [selectedExams, setSelectedExams] = useState([])
+  const [customFolders, setCustomFolders] = useState({})
+  const [customFolderError, setCustomFolderError] = useState('')
 
 
   // =========================================================
@@ -68,6 +72,13 @@ export default function Downloads() {
   useEffect(() => {
 
     let isMounted = true
+    try {
+      setCustomFolders(getCustomDocumentFolders())
+      setCustomFolderError('')
+    } catch (error) {
+      console.error('Unable to load custom document folders:', error)
+      setCustomFolderError('Custom exam folders could not be loaded. Folder placement is unavailable.')
+    }
 
     const loadSelectedExams = async () => {
 
@@ -192,24 +203,29 @@ export default function Downloads() {
 
   const [pdfs, setPdfs] = useState([])
   const [loadingPDFs, setLoadingPDFs] = useState(true)
+  const [pdfLoadError, setPdfLoadError] = useState('')
 
   const loadPDFs = async () => {
     try {
       setLoadingPDFs(true)
+      setPdfLoadError('')
 
       const storedPDFs = await getPDFs()
 
       const formattedPDFs = storedPDFs.map((pdf) => ({
         ...pdf,
+        category: getExamCategory(pdf.category) || 'Other',
+        examName: getExamSubfolderName(pdf),
         uploadedDate: pdf.createdAt,
         size: formatPDFSize(pdf.size),
         status: 'completed',
-        bookmarked: false
+        bookmarked: Boolean(pdf.bookmarked)
       }))
 
       setPdfs(formattedPDFs)
     } catch (error) {
       console.error('Failed to load saved PDFs:', error)
+      setPdfLoadError('Saved PDFs could not be loaded from this device.')
       setPdfs([])
     } finally {
       setLoadingPDFs(false)
@@ -221,154 +237,8 @@ export default function Downloads() {
   }, [])
 
   // =========================================================
-  // EXAM NAME NORMALIZATION
+  // DYNAMIC EXAM FOLDERS
   // =========================================================
-
-  const normalizeExam = (exam) => {
-
-    if (!exam) {
-      return null
-    }
-
-
-    // =======================================================
-    // IF EXAM IS AN OBJECT
-    // =======================================================
-
-    if (typeof exam === 'object') {
-
-      const possibleValue =
-        exam.name ||
-        exam.exam_name ||
-        exam.examName ||
-        exam.id ||
-        exam.exam_id ||
-        exam.value
-
-
-      if (possibleValue) {
-
-        return normalizeExam(
-          possibleValue
-        )
-
-      }
-
-
-      return null
-
-    }
-
-
-    // =======================================================
-    // CONVERT TO LOWERCASE STRING
-    // =======================================================
-
-    const value =
-      String(exam)
-        .trim()
-        .toLowerCase()
-
-
-    // =======================================================
-    // PSC
-    // =======================================================
-
-    if (
-      value === 'psc' ||
-      value === 'kerala psc' ||
-      value ===
-        'kerala public service commission' ||
-      value.includes('kerala psc')
-    ) {
-
-      return 'PSC'
-
-    }
-
-
-    // =======================================================
-    // SSC
-    // =======================================================
-
-    if (
-      value === 'ssc' ||
-      value ===
-        'staff selection commission' ||
-      value.includes('ssc')
-    ) {
-
-      return 'SSC'
-
-    }
-
-
-    // =======================================================
-    // UPSC
-    // =======================================================
-
-    if (
-      value === 'upsc' ||
-      value ===
-        'union public service commission' ||
-      value.includes('upsc')
-    ) {
-
-      return 'UPSC'
-
-    }
-
-
-    // =======================================================
-    // BANKING
-    // =======================================================
-
-    if (
-      value === 'bank' ||
-      value === 'banking' ||
-      value === 'banking exams' ||
-      value.includes('bank')
-    ) {
-
-      return 'Banking'
-
-    }
-
-
-    // =======================================================
-    // RAILWAY
-    // =======================================================
-
-    if (
-      value === 'railway' ||
-      value === 'railways' ||
-      value.includes('railway')
-    ) {
-
-      return 'Railway'
-
-    }
-
-
-    // =======================================================
-    // OTHER
-    // =======================================================
-
-    if (value === 'other') {
-
-      return 'Other'
-
-    }
-
-
-    // =======================================================
-    // UNKNOWN
-    // =======================================================
-
-    return null
-
-  }
-
 
   // =========================================================
   // USER SELECTED CATEGORY NAMES
@@ -376,19 +246,7 @@ export default function Downloads() {
 
   const selectedCategories = useMemo(() => {
 
-    const converted =
-      selectedExams
-        .map((exam) =>
-          normalizeExam(exam)
-        )
-        .filter(Boolean)
-
-
-    // Remove duplicate categories
-
-    return Array.from(
-      new Set(converted)
-    )
+    return uniqueExamFolders(selectedExams)
 
   }, [selectedExams])
 
@@ -401,10 +259,15 @@ export default function Downloads() {
 
     return [
       'All',
-      ...selectedCategories
+      ...uniqueExamFolders([
+        ...selectedCategories,
+        ...Object.keys(customFolders),
+        ...pdfs.map((pdf) => pdf.category || 'Other')
+      ])
+
     ]
 
-  }, [selectedCategories])
+  }, [customFolders, pdfs, selectedCategories])
 
 
   // =========================================================
@@ -420,6 +283,16 @@ export default function Downloads() {
       location.state?.category || 'All'
     )
 
+  const [selectedSubfolder, setSelectedSubfolder] =
+    useState(location.state?.subfolder || '')
+
+  useEffect(() => {
+    if (location.state?.category) {
+      setSelectedCategory(location.state.category)
+      setSelectedSubfolder(location.state.subfolder || '')
+    }
+  }, [location.state?.category, location.state?.subfolder])
+
 
   const [showFilterMenu, setShowFilterMenu] =
     useState(false)
@@ -434,28 +307,6 @@ export default function Downloads() {
 
 
   // =========================================================
-  // KEEP CATEGORY VALID
-  // =========================================================
-
-  useEffect(() => {
-
-    if (
-      !categories.includes(
-        selectedCategory
-      )
-    ) {
-
-      setSelectedCategory('All')
-
-    }
-
-  }, [
-    categories,
-    selectedCategory
-  ])
-
-
-  // =========================================================
   // PDFs FOR CURRENT CATEGORY VIEW
   // =========================================================
 
@@ -463,18 +314,15 @@ export default function Downloads() {
 
     // "All Categories" must show EVERY PDF saved in
     // SmartDoc AI local storage, regardless of exam selection.
-    if (selectedCategory === 'All') {
-      return pdfs
-    }
-
-    return pdfs.filter(
-      (pdf) =>
-        pdf.category === selectedCategory
+    return pdfs.filter((pdf) =>
+      (selectedCategory === 'All' || pdf.category === selectedCategory) &&
+      (!selectedSubfolder || pdf.examName === selectedSubfolder)
     )
 
   }, [
     pdfs,
-    selectedCategory
+    selectedCategory,
+    selectedSubfolder
   ])
 
   // =========================================================
@@ -519,20 +367,6 @@ export default function Downloads() {
     // =======================================================
     // CATEGORY FILTER
     // =======================================================
-
-    if (
-      selectedCategory !== 'All'
-    ) {
-
-      result =
-        result.filter(
-          (pdf) =>
-            pdf.category ===
-            selectedCategory
-        )
-
-    }
-
 
     // =======================================================
     // SEARCH
@@ -633,8 +467,6 @@ export default function Downloads() {
   }, [
 
     examFilteredPdfs,
-
-    selectedCategory,
 
     searchTerm,
 
@@ -897,41 +729,31 @@ export default function Downloads() {
   // BOOKMARK
   // =========================================================
 
-  const handleToggleBookmark = (
-    pdfId
-  ) => {
-
-    setPdfs(
-      (prev) =>
-
-        prev.map(
-          (pdf) =>
-
-            pdf.id === pdfId
-
-              ? {
-                  ...pdf,
-                  bookmarked:
-                    !pdf.bookmarked
-                }
-
-              : pdf
-        )
-    )
-
+  const handleToggleBookmark = async (pdf) => {
+    try {
+      await updatePDF(pdf.id, { bookmarked: !pdf.bookmarked })
+      await loadPDFs()
+    } catch (error) {
+      console.error('Failed to update PDF bookmark:', error)
+      alert('Unable to update this bookmark.')
+    }
   }
 
+  const handleMovePDF = async (pdf, category, examName) => {
+    const nextExamName = examName || 'General'
+    if (!category || (category === pdf.category && nextExamName === pdf.examName)) return
 
-  // =========================================================
-  // MORE OPTIONS
-  // =========================================================
-
-  const handleMoreOptions = (
-    pdf
-  ) => {
-
-    // Reserved for future options.
-
+    try {
+      await updatePDF(pdf.id, {
+        category,
+        examName: nextExamName,
+        examId: ''
+      })
+      await loadPDFs()
+    } catch (error) {
+      console.error('Failed to move PDF to exam folder:', error)
+      alert('Unable to move this PDF to the selected folder.')
+    }
   }
 
 
@@ -1031,6 +853,14 @@ export default function Downloads() {
 
           <div className="downloads-header-actions">
 
+            <button
+              type="button"
+              className="downloads-documents-btn"
+              onClick={() => navigate('/documents')}
+            >
+              <FiFolder size={17} />
+              <span>My Documents</span>
+            </button>
 
             {/* SEARCH */}
 
@@ -1181,6 +1011,32 @@ export default function Downloads() {
 
         </div>
 
+        <section className="downloads-folders" aria-label="Exam folders">
+          <div className="downloads-folders-heading">
+            <h2>Exam folders</h2>
+            <span>Choose a folder to filter your saved PDFs</span>
+          </div>
+          <div className="downloads-folder-grid">
+            {categories.slice(1).map((category) => {
+              const count = pdfs.filter((pdf) => pdf.category === category).length
+              return (
+                <button
+                  type="button"
+                  key={category}
+                  className={`downloads-folder-card ${selectedCategory === category ? 'active' : ''}`}
+                  onClick={() => navigate('/documents', { state: { category } })}
+                >
+                  <FiFolder size={20} />
+                  <span>{category}</span>
+                  <small>{count} {count === 1 ? 'PDF' : 'PDFs'}</small>
+                </button>
+              )
+            })}
+            {categories.length === 1 && (
+              <p className="downloads-no-folders">Folders appear here when you select an exam or save a PDF.</p>
+            )}
+          </div>
+        </section>
 
         {/* =================================================
             STATISTICS
@@ -1400,6 +1256,12 @@ export default function Downloads() {
 
           </div>
 
+        ) : pdfLoadError ? (
+          <div className="downloads-empty-state" role="alert">
+            <div className="downloads-empty-icon"><FiFileText size={42} /></div>
+            <h2>Library unavailable</h2>
+            <p>{pdfLoadError}</p>
+          </div>
         ) : visiblePdfs.length === 0 ? (
 
           <div className="downloads-empty-state">
@@ -1487,19 +1349,15 @@ export default function Downloads() {
                       </h3>
 
 
-                      {pdf.bookmarked && (
-
-                        <FiBookmark
-                          size={16}
-                          className="downloads-bookmark-icon"
-                          onClick={() =>
-                            handleToggleBookmark(
-                              pdf.id
-                            )
-                          }
-                        />
-
-                      )}
+                      <button
+                        type="button"
+                        className={`downloads-bookmark-toggle ${pdf.bookmarked ? 'active' : ''}`}
+                        aria-label={pdf.bookmarked ? 'Remove bookmark' : 'Bookmark PDF'}
+                        title={pdf.bookmarked ? 'Remove bookmark' : 'Bookmark PDF'}
+                        onClick={() => handleToggleBookmark(pdf)}
+                      >
+                        <FiBookmark size={16} />
+                      </button>
 
                     </div>
 
@@ -1524,6 +1382,53 @@ export default function Downloads() {
                       {pdf.size}
 
                     </p>
+
+                    <div className="downloads-move-folder">
+                      <label>
+                        Save in
+                        <select
+                          aria-label={`Choose category for ${pdf.title}`}
+                          value={pdf.category || 'Other'}
+                          disabled={Boolean(customFolderError)}
+                          onChange={(event) => handleMovePDF(pdf, event.target.value, 'General')}
+                        >
+                          {uniqueExamFolders([
+                            ...selectedCategories,
+                            ...Object.keys(customFolders),
+                            ...pdfs.map((item) => item.category || 'Other')
+                          ]).map((folder) => (
+                            <option key={folder} value={folder}>{folder}</option>
+                          ))}
+                        </select>
+                      </label>
+                      <label>
+                        Subfolder
+                        <select
+                          aria-label={`Choose subfolder for ${pdf.title}`}
+                          value={pdf.examName || 'General'}
+                          disabled={Boolean(customFolderError)}
+                          onChange={(event) => handleMovePDF(pdf, pdf.category || 'Other', event.target.value)}
+                        >
+                          {[...new Set([
+                            ...(Array.isArray(customFolders[pdf.category]) ? customFolders[pdf.category] : []),
+                            ...pdfs
+                              .filter((item) => item.category === pdf.category)
+                              .map((item) => item.examName),
+                            'General'
+                          ])].map((folder) => (
+                            <option key={folder} value={folder}>{folder}</option>
+                          ))}
+                        </select>
+                      </label>
+                      <button
+                        type="button"
+                        className="downloads-manage-folders"
+                        onClick={() => navigate('/documents', { state: { category: pdf.category } })}
+                      >
+                        Manage folders
+                      </button>
+                      {customFolderError && <small role="alert">{customFolderError}</small>}
+                    </div>
 
                   </div>
 
@@ -1556,22 +1461,6 @@ export default function Downloads() {
 
                       </span>
 
-
-                      <button
-                        className="downloads-more-btn"
-                        aria-label="More options"
-                        onClick={() =>
-                          handleMoreOptions(
-                            pdf
-                          )
-                        }
-                      >
-
-                        <FiMoreVertical
-                          size={16}
-                        />
-
-                      </button>
 
                     </div>
 
@@ -1771,28 +1660,23 @@ export default function Downloads() {
         </button>
 
 
-        {/* CENTRAL PLUS */}
+        {/* DOCUMENTS SHORTCUT */}
 
         <div className="sd-central-plus-wrapper">
 
           <button
             className="sd-central-plus-btn"
-            aria-label="Add / New"
+            aria-label="My Documents"
             onClick={() =>
-              navigate('/home')
+              navigate('/documents')
             }
           >
 
-            <FiPlus
+            <FiFileText
               size={24}
             />
 
           </button>
-
-
-          <span className="sd-nav-label sd-plus-label">
-            Add / New
-          </span>
 
         </div>
 

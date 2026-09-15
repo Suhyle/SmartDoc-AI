@@ -5,13 +5,14 @@ import {
   FiInfo,
   FiFileText,
 } from "react-icons/fi";
+import { useNavigate } from "react-router-dom";
 import "./EmailVerified.css";
 
 export default function EmailVerified() {
+  const navigate = useNavigate();
+
   const handleReturnToApp = () => {
-    alert(
-      "Your account has been verified successfully.\n\nPlease return to the Smart Doc AI app and log in using your registered email address and password."
-    );
+    navigate("/login");
   };
 
   return (
