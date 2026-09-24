@@ -108,16 +108,35 @@ const saveQuizResult = (config, questions, answers) => {
         : config.scope || 'Mock test';
     const saved = safeJson(RESULTS_KEY);
     const list = Array.isArray(saved) ? saved : [];
-    list.push({
+    
+    // Store full quiz data for review
+    const fullResult = {
       id: globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`,
-      exam: exam?.category || exam?.exam_name || 'Exam',
+      exam: exam?.category || exam?.examName || 'Exam',
       examName: exam?.exam_name || '',
       topic,
       testType: config.testType,
       date: new Date().toISOString(),
       score,
       total: mcq.length,
-    });
+      // Full data for review
+      questions: questions.map(q => ({
+        id: q.id,
+        type: q.type,
+        text: q.text,
+        options: q.options || [],
+        answer: q.answer,
+        explanation: q.explanation,
+        topic: q.topic,
+        chapter: q.chapter,
+        sourceTitle: q.sourceTitle,
+      })),
+      answers,
+      format: config.format,
+      difficulty: config.difficulty,
+      language: config.language,
+    };
+    list.push(fullResult);
     localStorage.setItem(RESULTS_KEY, JSON.stringify(list.slice(-50)));
   } catch (error) {
     console.error('Could not save quiz result', error);
@@ -223,6 +242,8 @@ function ProgressBar({ current, total }) {
 function QuizResultsHistory({ results, onUpdate, onDelete }) {
   const [editingId, setEditingId] = useState(null);
   const [draft, setDraft] = useState({ exam: '', topic: '' });
+  const [expandedId, setExpandedId] = useState(null);
+  const [viewMode, setViewMode] = useState('all'); // 'all' | 'correct' | 'wrong'
 
   if (!results.length) return null;
 
@@ -230,6 +251,28 @@ function QuizResultsHistory({ results, onUpdate, onDelete }) {
     const id = result.id || `${result.date}-${index}`;
     setEditingId(id);
     setDraft({ exam: result.exam || '', topic: result.topic || '' });
+  };
+
+  const toggleExpand = (id) => {
+    setExpandedId(expandedId === id ? null : id);
+  };
+
+  const getMcqQuestions = (result) => (result.questions || []).filter(q => q.type === 'mcq');
+  const getCorrectQuestions = (result) => {
+    const mcq = getMcqQuestions(result);
+    return mcq.filter(q => result.answers?.[q.id] === q.answer);
+  };
+  const getWrongQuestions = (result) => {
+    const mcq = getMcqQuestions(result);
+    return mcq.filter(q => result.answers?.[q.id] && result.answers?.[q.id] !== q.answer);
+  };
+  const getSkippedQuestions = (result) => {
+    const mcq = getMcqQuestions(result);
+    return mcq.filter(q => !result.answers?.[q.id]);
+  };
+
+  const formatDate = (dateStr) => {
+    try { return new Date(dateStr).toLocaleString(); } catch { return 'Date not recorded'; }
   };
 
   return (
@@ -242,6 +285,12 @@ function QuizResultsHistory({ results, onUpdate, onDelete }) {
         {results.map((result, index) => {
           const id = result.id || `${result.date}-${index}`;
           const editing = editingId === id;
+          const expanded = expandedId === id;
+          const mcqQuestions = getMcqQuestions(result);
+          const correctQuestions = getCorrectQuestions(result);
+          const wrongQuestions = getWrongQuestions(result);
+          const skippedQuestions = getSkippedQuestions(result);
+
           return (
             <article className="qz-history-row" key={id}>
               {editing ? (
@@ -255,21 +304,120 @@ function QuizResultsHistory({ results, onUpdate, onDelete }) {
                 </div>
               ) : (
                 <>
-                  <div className="qz-history-details">
-                    <strong>{result.exam || result.examName || 'Exam'} — {result.topic || 'Quiz'}</strong>
-                    <small>{result.date ? new Date(result.date).toLocaleString() : 'Date not recorded'} · Score {result.score}/{result.total}</small>
+                  <div className="qz-history-main" onClick={() => toggleExpand(id)}>
+                    <div className="qz-history-details">
+                      <strong>{result.exam || result.examName || 'Exam'} — {result.topic || 'Quiz'}</strong>
+                      <small>{formatDate(result.date)} · Score {result.score}/{result.total}</small>
+                    </div>
+                    <div className="qz-history-stats">
+                      <span className="qz-stat-chip correct"><FiCheckCircle /> {correctQuestions.length}</span>
+                      <span className="qz-stat-chip wrong"><FiX /> {wrongQuestions.length}</span>
+                      <span className="qz-stat-chip skipped"><FiAlertCircle /> {skippedQuestions.length}</span>
+                    </div>
+                    <div className="qz-history-expand">
+                      <FiList className={expanded ? 'rotated' : ''} />
+                    </div>
                   </div>
-                  <div className="qz-history-actions">
-                    <button type="button" aria-label="Edit quiz result labels" onClick={() => beginEdit(result, index)}><FiEdit3 /> Edit</button>
-                    <button type="button" className="danger" aria-label="Delete saved quiz result" onClick={() => onDelete(index)}><FiX /> Delete</button>
-                  </div>
+
+                  {expanded && (
+                    <div className="qz-history-expanded">
+                      <div className="qz-history-tabs">
+                        <button 
+                          type="button" 
+                          className={viewMode === 'all' ? 'active' : ''}
+                          onClick={() => setViewMode('all')}
+                        >
+                          All Questions ({mcqQuestions.length})
+                        </button>
+                        <button 
+                          type="button" 
+                          className={viewMode === 'correct' ? 'active' : ''}
+                          onClick={() => setViewMode('correct')}
+                        >
+                          Correct ({correctQuestions.length})
+                        </button>
+                        <button 
+                          type="button" 
+                          className={viewMode === 'wrong' ? 'active' : ''}
+                          onClick={() => setViewMode('wrong')}
+                        >
+                          Wrong ({wrongQuestions.length})
+                        </button>
+                      </div>
+                      <div className="qz-history-questions">
+                        {(() => {
+                          let questionsToShow = [];
+                          if (viewMode === 'all') questionsToShow = mcqQuestions;
+                          else if (viewMode === 'correct') questionsToShow = correctQuestions;
+                          else if (viewMode === 'wrong') questionsToShow = wrongQuestions;
+                          
+                          if (questionsToShow.length === 0) {
+                            return <p className="qz-empty-state">No questions in this category.</p>;
+                          }
+                          
+                          return questionsToShow.map((q) => {
+                            const userAnswer = result.answers?.[q.id];
+                            const isCorrect = userAnswer === q.answer;
+                            const isSkipped = !userAnswer;
+                            return (
+                              <div className={`qz-history-question ${isCorrect ? 'correct' : ''} ${isSkipped ? 'skipped' : ''} ${!isCorrect && !isSkipped ? 'wrong' : ''}`} key={q.id}>
+                                <div className="qz-history-q-header">
+                                  <span className="qz-history-q-topic">{q.topic || q.chapter || 'General'}</span>
+                                  <span className={`qz-history-q-status ${isCorrect ? 'correct' : ''} ${isSkipped ? 'skipped' : ''} ${!isCorrect && !isSkipped ? 'wrong' : ''}`}>
+                                    {isCorrect ? (
+                                      <> <FiCheckCircle /> Correct </>
+                                    ) : isSkipped ? (
+                                      <> <FiAlertCircle /> Skipped </>
+                                    ) : (
+                                      <> <FiX /> Wrong </>
+                                    )}
+                                  </span>
+                                </div>
+                                <p className="qz-history-q-text">{q.text}</p>
+                                <div className="qz-history-q-answers">
+                                  {q.options && q.options.length > 0 && (
+                                    <>
+                                      {q.options.map((opt, oi) => (
+                                        <span 
+                                          key={oi}
+                                          className={`qz-history-option ${opt === q.answer ? 'correct-answer' : ''} ${userAnswer === opt ? 'user-answer' : ''}`}
+                                        >
+                                          {String.fromCharCode(65 + oi)}. {opt}
+                                          {opt === q.answer && <FiCheckCircle className="qz-answer-icon" />}
+                                          {userAnswer === opt && userAnswer !== q.answer && <FiX className="qz-answer-icon" />}
+                                        </span>
+                                      ))}
+                                    </>
+                                  )}
+                                </div>
+                                {q.explanation && (
+                                  <p className="qz-history-q-explanation"><FiBookOpen /> {q.explanation}</p>
+                                )}
+                              </div>
+                            );
+                          });
+                        })()}
+                      </div>
+                      <div className="qz-history-actions">
+                        <button type="button" className="edit-btn" aria-label="Edit quiz result labels" onClick={() => beginEdit(result, index)}><FiEdit3 /> Edit</button>
+                        <button type="button" className="delete-btn" aria-label="Delete saved quiz result" onClick={() => onDelete(index)}><FiX /> Delete</button>
+                      </div>
+                    </div>
+                  )}
+
+                  {!expanded && (
+                    <div className="qz-history-actions-inline">
+                      <button type="button" className="edit-btn" aria-label="Edit quiz result labels" onClick={() => beginEdit(result, index)}><FiEdit3 /> Edit</button>
+                      <button type="button" className="delete-btn" aria-label="Delete saved quiz result" onClick={() => onDelete(index)}><FiX /> Delete</button>
+                    </div>
+                  )}
                 </>
               )}
             </article>
           );
         })}
       </div>
-      <p className="qz-history-note">Score and answers stay as recorded; you can edit the labels or remove an attempt from this device.</p>
+      <p className="qz-history-note">Score and answers stay as recorded; you can edit the labels or remove an attempt from this device. Click a row to expand and review questions.</p>
     </section>
   );
 }
