@@ -644,9 +644,6 @@ export default function Downloads() {
 
 
   // =========================================================
-  // VIEW PDF
-  // =========================================================
-  // =========================================================
   // GET A VALID PDF BLOB
   // =========================================================
 
@@ -663,12 +660,7 @@ export default function Downloads() {
 
     if (storedPDF.blob instanceof Blob) {
 
-      return new Blob(
-        [storedPDF.blob],
-        {
-          type: 'application/pdf'
-        }
-      )
+      return storedPDF.blob
 
     }
 
@@ -765,6 +757,7 @@ export default function Downloads() {
   // =========================================================
   // DOWNLOAD PDF
   // =========================================================
+
   const handleDownloadPDF = async (pdf) => {
 
     try {
@@ -882,13 +875,6 @@ export default function Downloads() {
       'Opening AI Chat for:',
       pdf
     )
-
-    // Future:
-    // navigate('/chat', {
-    //   state: {
-    //     pdfId: pdf.id
-    //   }
-    // })
 
   }
 
