@@ -335,41 +335,87 @@ async function fetchTranscriptWithLanguageFallback(
     requestedLang ||
     "en";
 
+  // ----------------------------------------------------------
+  // ATTEMPT 1: Requested language
+  // ----------------------------------------------------------
   try {
     const transcriptData =
       await YoutubeTranscript.fetchTranscript(
         videoId,
-        {
-          lang: langCode,
-        }
+        { lang: langCode }
       );
 
-    if (
-      transcriptData &&
-      transcriptData.length > 0
-    ) {
+    if (transcriptData && transcriptData.length > 0) {
       return {
         transcriptData,
-        actualLanguage:
-          requestedLang || "english",
+        actualLanguage: requestedLang || "english",
       };
     }
   } catch (err) {
     console.log(
-      `Transcript for requested lang '${requestedLang}' (${langCode}) not found. Trying default fallback...`
+      `Attempt 1 failed (lang='${langCode}'): ${err?.message || err}`
     );
   }
 
-  const transcriptData =
-    await YoutubeTranscript.fetchTranscript(
-      videoId
+  // ----------------------------------------------------------
+  // ATTEMPT 2: No language specified (auto-detect)
+  // ----------------------------------------------------------
+  try {
+    const transcriptData =
+      await YoutubeTranscript.fetchTranscript(videoId);
+
+    if (transcriptData && transcriptData.length > 0) {
+      return {
+        transcriptData,
+        actualLanguage: "english (fallback)",
+      };
+    }
+  } catch (err) {
+    console.log(
+      `Attempt 2 failed (auto): ${err?.message || err}`
     );
 
-  return {
-    transcriptData,
-    actualLanguage:
-      "english (fallback)",
-  };
+    // ----------------------------------------------------------
+    // ATTEMPT 3: Retry with extra headers to bypass bot-guard
+    // on cloud/datacenter IPs (Vercel, AWS, etc.)
+    // ----------------------------------------------------------
+    try {
+      const transcriptData =
+        await YoutubeTranscript.fetchTranscript(videoId, {
+          fetch: (url, init) =>
+            fetch(url, {
+              ...init,
+              headers: {
+                ...(init?.headers || {}),
+                "Accept-Language": "en-US,en;q=0.9",
+                "Accept":
+                  "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+              },
+            }),
+        });
+
+      if (transcriptData && transcriptData.length > 0) {
+        return {
+          transcriptData,
+          actualLanguage: "english (cloud-retry)",
+        };
+      }
+    } catch (retryErr) {
+      console.log(
+        `Attempt 3 (cloud-retry) failed: ${retryErr?.message || retryErr}`
+      );
+      // Surface a clear error code so the endpoint can return a helpful message
+      const blockedError = new Error(
+        "YouTube is blocking transcript access from this server's IP address. " +
+        "This is a YouTube restriction on cloud/datacenter IPs (Vercel, AWS, etc.). " +
+        "Please try a different video, or use the app locally."
+      );
+      blockedError.code = "YOUTUBE_IP_BLOCKED";
+      throw blockedError;
+    }
+  }
+
+  throw new Error("No transcript data returned from any attempt.");
 }
 
 // ==========================================================
@@ -1174,6 +1220,18 @@ app.post("/api/transcript", async (req, res) => {
       "Transcript Error:",
       error?.message || error
     );
+
+    // YouTube IP block (cloud/datacenter restriction)
+    if (error?.code === "YOUTUBE_IP_BLOCKED") {
+      return res.status(503).json({
+        success: false,
+        error:
+          "YouTube is currently blocking transcript access from this server. " +
+          "YouTube restricts automated transcript fetching from cloud/datacenter IPs (Vercel, AWS, etc.). " +
+          "Please try a different video — some videos may still work — or access the transcript feature locally.",
+        code: "YOUTUBE_IP_BLOCKED",
+      });
+    }
 
     return res.status(500).json({
       success: false,

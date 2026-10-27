@@ -1450,14 +1450,20 @@ const [isGeneratingCombinedSummary, setIsGeneratingCombinedSummary] = useState(f
           !response.ok ||
           !data.success
         ) {
+          // Clear user-friendly message for YouTube cloud IP block
+          const ipBlocked =
+            data.code === 'YOUTUBE_IP_BLOCKED' ||
+            response.status === 503;
 
           throw new Error(
-            data.message ||
-            data.error ||
-            data.details ||
-            'Unable to get transcript.'
+            ipBlocked
+              ? '⚠️ YouTube is blocking transcript access from Vercel\'s servers (a known YouTube restriction on cloud IPs). ' +
+                'Some videos may still work. You can also try: using the app locally, or pasting the transcript manually.'
+              : data.message ||
+                data.error ||
+                data.details ||
+                'Unable to get transcript.'
           )
-
         }
 
         const receivedTranscript =
