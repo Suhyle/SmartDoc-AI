@@ -2,14 +2,11 @@ import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 import Groq from "groq-sdk";
-import Cerebras from "@cerebras/cerebras_cloud_sdk";
 import { GoogleGenAI } from "@google/genai";
 import { YoutubeTranscript } from "youtube-transcript";
 import {
-  buildOllamaRetrievedSyllabusPrompt,
   buildMoreStudyVideosPrompt,
   buildStudyPlanPrompt,
-  OLLAMA_RETRIEVED_SYLLABUS_SYSTEM_INSTRUCTION,
   STUDY_PLAN_VIDEO_SYSTEM_INSTRUCTION,
   STUDY_PLAN_SYSTEM_INSTRUCTION,
 } from "./prompts/studyPlanPrompts.js";
@@ -49,14 +46,7 @@ const PORT = process.env.PORT || 5000;
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const GROQ_API_KEY = process.env.GROQ_API_KEY;
 const CEREBRAS_API_KEY = process.env.CEREBRAS_API_KEY;
-const OLLAMA_API_KEY = process.env.OLLAMA_API_KEY;
 const IS_VERCEL = Boolean(process.env.VERCEL);
-const OLLAMA_BASE_URL = (process.env.OLLAMA_BASE_URL || (IS_VERCEL ? "https://ollama.com" : "http://127.0.0.1:11434")).replace(/\/$/, "");
-const OLLAMA_MODEL = process.env.OLLAMA_MODEL || (IS_VERCEL ? "" : "qwen3:4b");
-// Study Plan uses Ollama Cloud's hosted DeepSeek model independently of the
-// local Ollama model used by transcript features.
-const STUDY_PLAN_OLLAMA_BASE_URL = (process.env.STUDY_PLAN_OLLAMA_BASE_URL || "https://ollama.com").replace(/\/$/, "");
-const STUDY_PLAN_OLLAMA_MODEL = process.env.STUDY_PLAN_OLLAMA_MODEL || "deepseek-v4.1-flash:cloud";
 
 // ==========================================================
 // AI CLIENTS
@@ -74,39 +64,26 @@ const groq = GROQ_API_KEY
     })
   : null;
 
-const cerebras = CEREBRAS_API_KEY
-  ? new Cerebras({
-      apiKey: CEREBRAS_API_KEY,
-    })
-  : null;
-
 // ==========================================================
 // AI MODELS
 // ==========================================================
 
-const GEMINI_MODEL = "gemini-3.7-flash";
-const ANTIGRAVITY_MODEL = "gemini-3.5-flash";
-const CEREBRAS_MODEL = "gpt-oss-120b";
-const GROQ_MODEL = "openai/gpt-oss-120b";
+const GEMINI_MODEL = "gemini-3.5-flash";
+const GROQ_MODEL = "qwen/qwen3.8-27b";
 
 // ==========================================================
 // PROVIDER NAMES
 // ==========================================================
 
 const PROVIDERS = {
-  GEMINI: "SmartDoc AI 1",
-  CEREBRAS: "SmartDoc AI 2",
-  GROQ: "SmartDoc AI 3",
-  OLLAMA: "SmartDoc AI 4",
+  GROQ: "SmartDoc AI 1",
+  GEMINI: "SmartDoc AI 2",
 };
 
-// Study Plan has its own provider labels and order. Do not change the
-// transcript provider labels or fallback behavior.
+// Study Plan has its own provider labels.
 const STUDY_PLAN_PROVIDER_FLAGS = {
-  GEMINI: "SmartDoc AI 1",
-  GROQ: "SmartDoc AI 2",
-  ANTIGRAVITY: "SmartDoc AI 3",
-  OLLAMA: "SmartDoc AI 4",
+  GROQ: "SmartDoc AI 1",
+  GEMINI: "SmartDoc AI 2",
 };
 
 // ==========================================================
@@ -169,47 +146,6 @@ async function askGemini(messages, options = {}) {
 }
 
 // ==========================================================
-// CEREBRAS
-// ==========================================================
-
-async function askCerebras(messages, options = {}) {
-  console.log("Trying Cerebras...");
-
-  if (!CEREBRAS_API_KEY || !cerebras) {
-    throw new Error("CEREBRAS_API_KEY is missing.");
-  }
-
-  const response =
-    await cerebras.chat.completions.create({
-      model: CEREBRAS_MODEL,
-      messages,
-      temperature: 0.2,
-      max_completion_tokens: Math.min(
-        options.maxCompletionTokens || 8192,
-        8192
-      ),
-    });
-
-  const content =
-    response?.choices?.[0]?.message?.content;
-
-  if (!content) {
-    throw new Error(
-      "Cerebras returned an empty response."
-    );
-  }
-
-  recordProvider(
-    PROVIDERS.CEREBRAS,
-    options.providerTracker
-  );
-
-  console.log("Cerebras succeeded.");
-
-  return content.trim();
-}
-
-// ==========================================================
 // GROQ
 // ==========================================================
 
@@ -220,138 +156,49 @@ async function askGroq(messages, options = {}) {
     throw new Error("GROQ_API_KEY is missing.");
   }
 
-  const response =
-    await groq.chat.completions.create({
-      model: GROQ_MODEL,
-      messages,
-      ...(options.enableBrowserSearch ? { tools: [{ type: "browser_search" }] } : {}),
-      temperature: 0.2,
-      max_completion_tokens: Math.min(
-        options.maxCompletionTokens || 4096,
-        4096
-      ),
-    });
-
-  const content =
-    response?.choices?.[0]?.message?.content;
-
-  if (!content) {
-    throw new Error(
-      "Groq returned an empty response."
-    );
-  }
-
-  recordProvider(
-    PROVIDERS.GROQ,
-    options.providerTracker
-  );
-
-  console.log("Groq succeeded.");
-
-  return content.trim();
-}
-
-async function askOllama(messages, options = {}) {
-  console.log(`Trying Ollama ${IS_VERCEL ? "Cloud" : "locally"} (${OLLAMA_MODEL})...`);
-  if (IS_VERCEL && !OLLAMA_API_KEY) {
-    throw new Error("Ollama on Vercel needs OLLAMA_API_KEY and a cloud model in Vercel Environment Variables; Vercel cannot reach Ollama on your PC.");
-  }
-  if (IS_VERCEL && !OLLAMA_MODEL) {
-    throw new Error("Set OLLAMA_MODEL in Vercel to a cloud model available to your Ollama account.");
-  }
-
-  const response = await fetch(`${OLLAMA_BASE_URL}/api/chat`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      ...(OLLAMA_API_KEY ? { Authorization: `Bearer ${OLLAMA_API_KEY}` } : {}),
-    },
-    body: JSON.stringify({
-      model: OLLAMA_MODEL,
-      messages,
-      stream: false,
-      options: {
-        temperature: 0.2,
-        num_predict: Math.min(options.maxCompletionTokens || 4096, 8192),
-      },
-    }),
-    signal: AbortSignal.timeout(300000),
+  const response = await groq.chat.completions.create({
+    model: GROQ_MODEL,
+    messages,
+    ...(options.enableBrowserSearch ? { tools: [{ type: "browser_search" }] } : {}),
+    temperature: 0.2,
+    max_completion_tokens: Math.min(
+      options.maxCompletionTokens || 4096,
+      4096
+    ),
   });
 
-  const result = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    throw new Error(result?.error || `Ollama returned HTTP ${response.status}.`);
+  const content = response?.choices?.[0]?.message?.content;
+
+  if (!content) {
+    throw new Error("Groq returned an empty response.");
   }
 
-  const content = result?.message?.content;
-  if (!content) throw new Error("Ollama returned an empty response.");
-
-  recordProvider(PROVIDERS.OLLAMA, options.providerTracker);
-  console.log("Ollama succeeded.");
+  recordProvider(PROVIDERS.GROQ, options.providerTracker);
+  console.log("Groq succeeded.");
   return content.trim();
 }
 
 // ==========================================================
-// CENTRAL AI FALLBACK
+// CENTRAL AI FALLBACK — GROQ FIRST → GEMINI
+// Used by: Transcript (single + multiple), Quiz, Study Plan
 // ==========================================================
 
 async function askAI(messages, options = {}) {
-  // 1. GEMINI
+  // 1. GROQ (primary)
   try {
-    const result =
-      await askGemini(messages, options);
-
+    const result = await askGroq(messages, options);
     if (result) return result;
   } catch (error) {
-    console.error(
-      "Gemini failed:",
-      error?.message || error
-    );
-
-    console.log(
-      "Switching to Cerebras..."
-    );
+    console.error("Groq failed:", error?.message || error);
+    console.log("Switching to Gemini...");
   }
 
-  // 2. CEREBRAS
+  // 2. GEMINI (fallback)
   try {
-    const result =
-      await askCerebras(messages, options);
-
+    const result = await askGemini(messages, options);
     if (result) return result;
   } catch (error) {
-    console.error(
-      "Cerebras failed:",
-      error?.message || error
-    );
-
-    console.log(
-      "Switching to Groq..."
-    );
-  }
-
-  // 3. GROQ
-  try {
-    const result =
-      await askGroq(messages, options);
-
-    if (result) return result;
-  } catch (error) {
-    console.error(
-      "Groq failed:",
-      error?.message || error
-    );
-  }
-
-  // 4. OLLAMA (local)
-  try {
-    const result = await askOllama(messages, options);
-    if (result) return result;
-  } catch (error) {
-    console.error(
-      "Ollama failed:",
-      error?.message || error
-    );
+    console.error("Gemini failed:", error?.message || error);
   }
 
   throw new Error(
@@ -966,6 +813,9 @@ function cleanSummaryOutput(
 
   let cleaned =
     String(text).trim();
+
+  // 0. Remove thinking tags from thinking models
+  cleaned = cleaned.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
 
   // 1. Remove Markdown Code Fences
   cleaned =
@@ -2981,76 +2831,11 @@ function buildStudySchedule(sections, durationDays, studyHoursPerDay, startDate)
   return weeks;
 }
 
-async function askAntigravityStudyPlan(messages, options = {}) {
-  console.log("Trying Antigravity...");
-  if (!GEMINI_API_KEY || !gemini) {
-    throw new Error("GEMINI_API_KEY is missing.");
-  }
 
-  const systemInstruction = messages.find((message) => message.role === "system")?.content || "You are SmartDoc AI.";
-  const input = messages
-    .filter((message) => message.role === "user")
-    .map((message) => message.content)
-    .join("\n\n");
-  const interaction = await gemini.interactions.create({
-    agent: "antigravity-preview-09-2026",
-    environment: "remote",
-    system_instruction: systemInstruction,
-    input,
-    tools: [
-      { type: "google_search" },
-      { type: "url_context" },
-    ],
-    agent_config: {
-      type: "antigravity",
-      model: ANTIGRAVITY_MODEL,
-      max_total_tokens: "12000",
-    },
-  }, { timeout: 300000 });
-
-  const content = interaction?.output_text;
-  if (!content) throw new Error("Antigravity returned an empty study plan.");
-
-  recordProvider(STUDY_PLAN_PROVIDER_FLAGS.ANTIGRAVITY, options.providerTracker);
-  console.log("Antigravity succeeded.");
-  return content.trim();
-}
-
-async function askOllamaStudyPlan(messages, options = {}) {
-  console.log(`Trying Ollama Cloud (${STUDY_PLAN_OLLAMA_MODEL}) for Study Plan...`);
-  if (!OLLAMA_API_KEY) {
-    throw new Error("Study Plan Ollama Cloud needs OLLAMA_API_KEY in the backend environment.");
-  }
-  const response = await fetch(`${STUDY_PLAN_OLLAMA_BASE_URL}/api/chat`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      ...(OLLAMA_API_KEY ? { Authorization: `Bearer ${OLLAMA_API_KEY}` } : {}),
-    },
-    body: JSON.stringify({
-      model: STUDY_PLAN_OLLAMA_MODEL,
-      messages,
-      format: "json",
-      stream: false,
-      options: { temperature: 0.2, num_predict: 8192 },
-    }),
-    signal: AbortSignal.timeout(300000),
-  });
-
-  const result = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    throw new Error(result?.error || `Ollama returned HTTP ${response.status}.`);
-  }
-  const content = result?.message?.content;
-  if (!content) throw new Error("Ollama returned an empty study plan.");
-
-  recordProvider(STUDY_PLAN_PROVIDER_FLAGS.OLLAMA, options.providerTracker);
-  console.log("Ollama succeeded.");
-  return content.trim();
-}
 
 function parseStudyPlanJson(responseText) {
   const cleaned = String(responseText || "")
+    .replace(/<think>[\s\S]*?<\/think>/gi, "")
     .replace(/^```(?:json)?\s*/i, "")
     .replace(/\s*```$/, "")
     .trim();
@@ -3122,16 +2907,11 @@ function normalizeQuizQuestions(payload, requestedFormat, requestedCount) {
 }
 
 async function runQuizGenerationWithFallback(messages, requestedFormat, requestedCount) {
-  const attempts = [];
-  attempts.push(
-    { name: "Gemini", run: () => askGemini(messages, { maxCompletionTokens: 8192, responseMimeType: "application/json" }) },
+  // Quiz generation: Groq first → Gemini fallback
+  const attempts = [
     { name: "Groq", run: () => askGroq(messages, { maxCompletionTokens: 4096 }) },
-    { name: "Ollama Cloud", run: () => askOllamaStudyPlan(messages) },
-    { name: "Cerebras", run: () => askCerebras(messages, { maxCompletionTokens: 4096 }) },
-  );
-  if (!IS_VERCEL && OLLAMA_MODEL) {
-    attempts.push({ name: "Local Ollama", run: () => askOllama(messages, { maxCompletionTokens: 4096 }) });
-  }
+    { name: "Gemini", run: () => askGemini(messages, { maxCompletionTokens: 8192, responseMimeType: "application/json" }) },
+  ];
 
   const errors = [];
   for (const attempt of attempts) {
@@ -3208,99 +2988,6 @@ function officialSyllabusHostAllowed(url, exam) {
   }
 }
 
-async function getOllamaOfficialSyllabusEvidence(exam) {
-  if (!OLLAMA_API_KEY) throw new Error("Ollama syllabus search needs OLLAMA_API_KEY in the backend environment.");
-  const query = `${exam.exam_name} ${exam.category} ${exam.organization} official syllabus recruitment notification exam pattern`;
-  const searchResponse = await fetch("https://ollama.com/api/web_search", {
-    method: "POST",
-    headers: { Authorization: `Bearer ${OLLAMA_API_KEY}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ query }),
-    signal: AbortSignal.timeout(15000),
-  });
-  if (!searchResponse.ok) {
-    throw new Error(`Ollama web search returned HTTP ${searchResponse.status}.`);
-  }
-  const searchPayload = await searchResponse.json();
-  const officialResults = (Array.isArray(searchPayload?.results) ? searchPayload.results : [])
-    .filter((result) => result?.url && officialSyllabusHostAllowed(result.url, exam))
-    .slice(0, 3);
-  if (!officialResults.length) {
-    throw new Error("Ollama Web Search found no results on an allowed official exam authority domain.");
-  }
-
-  const evidence = await Promise.all(officialResults.map(async (result) => {
-    let fetched = null;
-    try {
-      const response = await fetch("https://ollama.com/api/web_fetch", {
-        method: "POST",
-        headers: { Authorization: `Bearer ${OLLAMA_API_KEY}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ url: result.url }),
-        signal: AbortSignal.timeout(15000),
-      });
-      if (response.ok) fetched = await response.json();
-    } catch (error) {
-      console.warn("Ollama Web Fetch failed for official syllabus result:", String(error?.message || error));
-    }
-    return {
-      title: String(fetched?.title || result.title || "Official exam notice"),
-      url: result.url,
-      searchSnippet: String(result.content || "").slice(0, 2500),
-      fetchedText: String(fetched?.content || "").slice(0, 9000),
-    };
-  }));
-  return evidence;
-}
-
-async function searchOllamaVideos({ exam, sections, excludedKeys, count }) {
-  if (!OLLAMA_API_KEY) {
-    throw new Error("Ollama web search needs OLLAMA_API_KEY in the backend environment.");
-  }
-
-  const examName = String(exam.exam_name || exam.examName || "").trim();
-  const category = String(exam.category || "").trim();
-  const seenKeys = new Set(excludedKeys);
-  const videos = [];
-  const searchSections = sections.slice(0, Math.max(count, 1));
-
-  for (const section of searchSections) {
-    if (videos.length >= count) break;
-    const sectionName = String(section?.name || "").trim();
-    const topics = Array.isArray(section?.topics) ? section.topics.slice(0, 3).join(" ") : "";
-    const query = `${examName} ${category} ${sectionName} ${topics} YouTube lessons site:youtube.com/watch`;
-    const response = await fetch("https://ollama.com/api/web_search", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${OLLAMA_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ query }),
-      signal: AbortSignal.timeout(15000),
-    });
-
-    if (!response.ok) {
-      const details = await response.text().catch(() => "");
-      throw new Error(`Ollama web search returned HTTP ${response.status}${details ? `: ${details.slice(0, 300)}` : ""}`);
-    }
-
-    const payload = await response.json();
-    for (const result of Array.isArray(payload?.results) ? payload.results : []) {
-      const url = String(result?.url || "").trim();
-      const key = youtubeVideoKey(url);
-      if (!key || seenKeys.has(key)) continue;
-      seenKeys.add(key);
-      videos.push({
-        title: String(result?.title || sectionName || "Recommended lesson").trim(),
-        topic: sectionName,
-        channel: "YouTube",
-        youtubeUrl: url,
-        duration: "",
-      });
-      if (videos.length >= count) break;
-    }
-  }
-
-  return JSON.stringify({ videos });
-}
 
 app.post("/api/study-plan/videos", async (req, res) => {
   const { exam = {}, sections = [], excludedVideoUrls = [], count = 4 } = req.body || {};
@@ -3317,14 +3004,9 @@ app.post("/api/study-plan/videos", async (req, res) => {
     excludedVideoUrls,
     count: safeCount,
   });
+
+  // Groq first → Gemini fallback
   const attempts = [
-    {
-      name: "Gemini",
-      run: () => askGemini([
-        { role: "system", content: STUDY_PLAN_VIDEO_SYSTEM_INSTRUCTION },
-        { role: "user", content: videoPrompt },
-      ], { maxCompletionTokens: 4096, enableGoogleSearch: true, responseMimeType: "application/json" }),
-    },
     {
       name: "Groq",
       run: () => askGroq([
@@ -3333,15 +3015,11 @@ app.post("/api/study-plan/videos", async (req, res) => {
       ], { maxCompletionTokens: 4096, enableBrowserSearch: true }),
     },
     {
-      name: "Antigravity",
-      run: () => askAntigravityStudyPlan([
+      name: "Gemini",
+      run: () => askGemini([
         { role: "system", content: STUDY_PLAN_VIDEO_SYSTEM_INSTRUCTION },
         { role: "user", content: videoPrompt },
-      ]),
-    },
-    {
-      name: "Ollama Web Search",
-      run: () => searchOllamaVideos({ exam, sections, excludedKeys, count: safeCount }),
+      ], { maxCompletionTokens: 4096, enableGoogleSearch: true, responseMimeType: "application/json" }),
     },
   ];
   const errors = [];
@@ -3415,30 +3093,15 @@ app.post("/api/study-plan/generate", async (req, res) => {
       official_website_url: exam.official_website_url || "",
     };
 
-    const geminiPrompt = buildStudyPlanPrompt({ exam: examDetails, durationDays, studyHoursPerDay, startDate });
-    let ollamaSyllabusEvidence = [];
+    const planPrompt = buildStudyPlanPrompt({ exam: examDetails, durationDays, studyHoursPerDay, startDate });
+    // Groq first → Gemini fallback
     const attempts = [
-      {
-        name: "Gemini",
-        flag: STUDY_PLAN_PROVIDER_FLAGS.GEMINI,
-        messages: [
-          { role: "system", content: STUDY_PLAN_SYSTEM_INSTRUCTION },
-          { role: "user", content: geminiPrompt },
-        ],
-        run: (messages, providerTracker) => askGemini(messages, {
-          providerTracker,
-          maxCompletionTokens: 8192,
-          enableGoogleSearch: true,
-          responseMimeType: "application/json",
-        }),
-        webSearchUsed: true,
-      },
       {
         name: "Groq",
         flag: STUDY_PLAN_PROVIDER_FLAGS.GROQ,
         messages: [
           { role: "system", content: STUDY_PLAN_SYSTEM_INSTRUCTION },
-          { role: "user", content: geminiPrompt },
+          { role: "user", content: planPrompt },
         ],
         run: (messages, providerTracker) => askGroq(messages, {
           providerTracker,
@@ -3448,37 +3111,19 @@ app.post("/api/study-plan/generate", async (req, res) => {
         webSearchUsed: true,
       },
       {
-        name: "Antigravity",
-        flag: STUDY_PLAN_PROVIDER_FLAGS.ANTIGRAVITY,
+        name: "Gemini",
+        flag: STUDY_PLAN_PROVIDER_FLAGS.GEMINI,
         messages: [
           { role: "system", content: STUDY_PLAN_SYSTEM_INSTRUCTION },
-          { role: "user", content: geminiPrompt },
+          { role: "user", content: planPrompt },
         ],
-        run: (messages, providerTracker) => askAntigravityStudyPlan(messages, {
+        run: (messages, providerTracker) => askGemini(messages, {
           providerTracker,
+          maxCompletionTokens: 8192,
+          enableGoogleSearch: true,
+          responseMimeType: "application/json",
         }),
         webSearchUsed: true,
-      },
-      {
-        name: "Ollama Cloud (DeepSeek V4.1 Flash)",
-        flag: STUDY_PLAN_PROVIDER_FLAGS.OLLAMA,
-        isOllama: true,
-        messages: [],
-        run: async (_messages, providerTracker) => {
-          ollamaSyllabusEvidence = await getOllamaOfficialSyllabusEvidence(examDetails);
-          const prompt = buildOllamaRetrievedSyllabusPrompt({
-            exam: examDetails,
-            durationDays,
-            studyHoursPerDay,
-            startDate,
-            sources: ollamaSyllabusEvidence,
-          });
-          return askOllamaStudyPlan([
-            { role: "system", content: OLLAMA_RETRIEVED_SYLLABUS_SYSTEM_INSTRUCTION },
-            { role: "user", content: prompt },
-          ], { providerTracker });
-        },
-        webSearchUsed: false,
       },
     ];
     const providerErrors = [];
@@ -3496,26 +3141,8 @@ app.post("/api/study-plan/generate", async (req, res) => {
 
         const providerIndex = attempts.indexOf(attempt);
         const fallbackUsed = providerIndex > 0;
-        let webSearchUsed = attempt.webSearchUsed;
-        if (attempt.isOllama) {
-          const normalizeEvidence = (value) => String(value || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
-          const normalizedName = normalizeEvidence(examDetails.exam_name);
-          const sourceText = normalizeEvidence(ollamaSyllabusEvidence.map((source) => `${source.title} ${source.searchSnippet} ${source.fetchedText}`).join(" "));
-          const exactSourceMatch = normalizedName.length > 0 && sourceText.includes(normalizedName);
-          const modelConfirmsMatch = plan.exactMatch === true
-            && plan.syllabusVerified === true
-            && normalizeEvidence(plan.matchedExamName) === normalizedName
-            && normalizeEvidence(plan.matchedCategory) === normalizeEvidence(examDetails.category);
-          if (!exactSourceMatch || !modelConfirmsMatch) {
-            throw new Error("Ollama Web Search could not verify the exact post and category from an official syllabus source. Add the syllabus manually.");
-          }
-          plan.syllabusVerified = true;
-          plan.exactMatch = true;
-          plan.summary = `${String(plan.summary || "Official syllabus matched.").trim()} Summarized by DeepSeek V4.1 Flash via Ollama Cloud from official source material retrieved with Ollama Web Search.`;
-          plan.sections = plan.sections.map((section) => ({ ...section, sourceType: "official" }));
-          plan.sources = ollamaSyllabusEvidence.map(({ title, url }) => ({ title, url, type: "official" }));
-          plan.videos = [];
-        } else {
+        const webSearchUsed = attempt.webSearchUsed;
+
         plan.sources = Array.isArray(plan.sources)
           ? plan.sources.filter((source) => /^https:\/\//i.test(source?.url || ""))
           : [];
@@ -3523,33 +3150,8 @@ app.post("/api/study-plan/generate", async (req, res) => {
           ? plan.videos.filter((video) => /^https?:\/\/(www\.)?(youtube\.com|youtu\.be)\//i.test(video?.youtubeUrl || ""))
             .slice(0, 4)
           : [];
-        }
-
-        if (OLLAMA_API_KEY && plan.sections.length && plan.videos.length < 3) {
-          try {
-            const excludedKeys = new Set(plan.videos.map((video) => youtubeVideoKey(video.youtubeUrl)).filter(Boolean));
-            const supplemental = JSON.parse(await searchOllamaVideos({
-              exam: examDetails,
-              sections: plan.sections,
-              excludedKeys,
-              count: Math.min(4 - plan.videos.length, 4),
-            }));
-            const seenKeys = new Set(excludedKeys);
-            const extraVideos = (Array.isArray(supplemental?.videos) ? supplemental.videos : [])
-              .filter((video) => {
-                const key = youtubeVideoKey(video?.youtubeUrl || "");
-                if (!key || seenKeys.has(key)) return false;
-                seenKeys.add(key);
-                return true;
-              });
-            plan.videos = [...plan.videos, ...extraVideos].slice(0, 4);
-            webSearchUsed = true;
-          } catch (videoSearchError) {
-            console.warn("Ollama Web Search could not supplement initial Study Plan videos:", String(videoSearchError?.message || videoSearchError));
-          }
-        }
+        plan.exactMatch = false;
         plan.weeks = buildStudySchedule(plan.sections, durationDays, studyHoursPerDay, startDate);
-        if (!attempt.isOllama) plan.exactMatch = false;
 
         console.log(`Study Plan generated using ${attempt.name}${fallbackUsed ? " fallback" : " primary"}.`);
         return res.json({
@@ -3559,7 +3161,7 @@ app.post("/api/study-plan/generate", async (req, res) => {
           providerFlag: attempt.flag,
           fallbackUsed,
           webSearchUsed,
-          exactMatch: attempt.isOllama && plan.exactMatch === true,
+          exactMatch: false,
           needsCustomSyllabus: false,
           attemptedProviders: attempts.slice(0, providerIndex + 1).map(({ name }) => name),
           generatedAt: new Date().toISOString(),
@@ -3745,13 +3347,6 @@ app.post("/api/quiz/grade-written", async (req, res) => {
       { role: "user", content: prompt, ...(image ? { images: [image.base64] } : {}) },
     ];
     const attempts = [];
-    if (!image && !IS_VERCEL && OLLAMA_MODEL) {
-      attempts.push({ name: "Local Ollama", run: () => askOllama(gradingMessages, { maxCompletionTokens: 2048 }) });
-    }
-    attempts.push({
-      name: "DeepSeek V4.1 Flash via Ollama Cloud",
-      run: () => askOllamaStudyPlan(gradingMessages),
-    });
     attempts.push({ name: "Gemini", run: () => askGeminiQuizGrade(prompt, image) });
     if (!image) attempts.push({ name: "Groq", run: () => askGroq(gradingMessages, { maxCompletionTokens: 2048 }) });
 
@@ -3874,27 +3469,35 @@ app.use(
 );
 
 // ==========================================================
-// START SERVER
+// START SERVER (local only — Vercel uses export default)
 // ==========================================================
 
-app.listen(
-  PORT,
-  () => {
-    console.log(
-      "========================================"
-    );
+if (!process.env.VERCEL) {
+  app.listen(
+    PORT,
+    () => {
+      console.log(
+        "========================================"
+      );
 
-    console.log(
-      "SmartDoc AI Backend"
-    );
+      console.log(
+        "SmartDoc AI Backend"
+      );
 
-    console.log(
-      "Server running on port:",
-      PORT
-    );
+      console.log(
+        "Server running on port:",
+        PORT
+      );
 
-    console.log(
-      "========================================"
-    );
-  }
-);
+      console.log(
+        "========================================"
+      );
+    }
+  );
+}
+
+// ==========================================================
+// EXPORT FOR VERCEL SERVERLESS
+// ==========================================================
+
+export default app;

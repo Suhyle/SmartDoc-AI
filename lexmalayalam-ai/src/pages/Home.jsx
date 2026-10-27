@@ -174,7 +174,14 @@ export default function Home() {
   const navigate = useNavigate()
   const user = useUser()
   const selectedExams = useMemo(() => {
-    const raw = user?.user_metadata?.selected_exams || []
+    let raw = user?.user_metadata?.selected_exams
+    if (!raw || (Array.isArray(raw) && raw.length === 0)) {
+      try {
+        raw = JSON.parse(localStorage.getItem('smartdoc_selected_exams') || '[]')
+      } catch {
+        raw = []
+      }
+    }
     return (Array.isArray(raw) ? raw : [raw]).filter(Boolean)
   }, [user])
   const examNames = useMemo(() => selectedExams.map((e) => EXAM_LABELS[String(e).toLowerCase()] || String(e).toUpperCase()), [selectedExams])

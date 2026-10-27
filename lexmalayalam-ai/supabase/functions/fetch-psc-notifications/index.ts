@@ -222,9 +222,13 @@ serve(async (req) => {
   console.log("PSC fetch started");
 
   try {
-    // 1. Initialize Supabase Client (Service Role or Anon fallback)
-    const supabaseUrl = Deno.env.get("SUPABASE_URL");
-    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    // -------------------------------------------------------
+    // Step 1: Initialize Supabase Client inside the Edge Function
+    // This runs on SUPABASE'S SERVER (not in the user's browser).
+    // It uses the service role key so it can write to the database.
+    // -------------------------------------------------------
+    const supabaseUrl = Deno.env.get("SUPABASE_URL"); // Supabase project URL from environment
+    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY"); // Admin key — can insert/update DB
 
     if (!supabaseUrl || !supabaseKey) {
       console.error("Missing Supabase environment variables!");
@@ -234,13 +238,18 @@ serve(async (req) => {
       );
     }
 
-    const supabase = createClient(supabaseUrl, supabaseKey);
+    const supabase = createClient(supabaseUrl, supabaseKey); // Create Supabase client on server side
 
-    // 2. Fetch main official PSC notifications page
-    const pscMainUrl = "https://www.keralapsc.gov.in/notifications";
+    // -------------------------------------------------------
+    // Step 2: Fetch the official Kerala PSC notifications page
+    // This is the KEY difference from SSC/Railway/UPSC/Banking:
+    // Instead of admin manually adding data, we AUTOMATICALLY visit
+    // the official Kerala PSC government website and read its HTML.
+    // -------------------------------------------------------
+    const pscMainUrl = "https://www.keralapsc.gov.in/notifications"; // Official Kerala PSC website URL
     console.log(`Requesting official PSC source: ${pscMainUrl}`);
 
-    const mainRes = await fetch(pscMainUrl, { headers: FETCH_HEADERS });
+    const mainRes = await fetch(pscMainUrl, { headers: FETCH_HEADERS }); // Make HTTP request to PSC website
 
     if (!mainRes.ok) {
       console.error(`Failed to fetch PSC main page. Status: ${mainRes.status}`);
@@ -250,43 +259,47 @@ serve(async (req) => {
       );
     }
 
-    const mainHtml = await mainRes.text();
+    const mainHtml = await mainRes.text(); // Convert the PSC website response to raw HTML text
     console.log("PSC page fetched successfully");
 
-    // 3. Parse main table <tr> rows
-    const trMatches = mainHtml.match(/<tr[\s\S]*?<\/tr>/gi) || [];
+    // -------------------------------------------------------
+    // Step 3: Parse the HTML to find all notification table rows (<tr> tags)
+    // The PSC website shows notifications in an HTML table.
+    // We use regex to find all <tr> rows from the page HTML.
+    // -------------------------------------------------------
+    const trMatches = mainHtml.match(/<tr[\s\S]*?<\/tr>/gi) || []; // Find all table rows in HTML
     console.log(`Number of notification entries found: ${trMatches.length}`);
 
-    let fetchedCount = 0;
-    let insertedCount = 0;
-    let updatedCount = 0;
-    let skippedCount = 0;
+    let fetchedCount = 0;  // How many PSC items we tried to process
+    let insertedCount = 0; // How many were NEW and inserted into Supabase
+    let updatedCount = 0;  // How many already existed and were updated in Supabase
+    let skippedCount = 0;  // How many were skipped (invalid/incomplete data)
 
-    // Process top recent Gazettes (limit to top 5 recent gazettes to avoid rate limits)
-    const gazetteRows = trMatches.filter((tr) => !tr.includes("<th")).slice(0, 5);
+    // Take only the top 5 most recent gazette rows (to avoid slow processing / rate limits)
+    const gazetteRows = trMatches.filter((tr) => !tr.includes("<th")).slice(0, 5); // Skip header rows, take top 5
 
     for (const tr of gazetteRows) {
       // Each PSC post requires parsing an official PDF. Bound this demo refresh
       // to avoid the Edge worker exhausting memory on large gazettes.
-      if (fetchedCount >= 12) break;
-      // Extract detail page link
+      if (fetchedCount >= 12) break; // Safety limit: stop after 12 items to avoid timeout
+      // Extract the gazette detail page link from the HTML row
       const linkMatch = /<a\s+[^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi.exec(tr);
-      // Extract last date
+      // Extract the application last date from <time> HTML element
       const timeMatch = /<time[^>]*>([\s\S]*?)<\/time>/gi.exec(tr);
 
-      if (!linkMatch) continue;
+      if (!linkMatch) continue; // Skip this row if no link found
 
-      const detailRelativeUrl = linkMatch[1];
-      const gazetteTitle = decodeHtmlEntities(linkMatch[2].replace(/<[^>]+>/g, ""));
+      const detailRelativeUrl = linkMatch[1]; // Relative URL to the gazette detail page
+      const gazetteTitle = decodeHtmlEntities(linkMatch[2].replace(/<[^>]+>/g, "")); // Clean gazette name
       // The current Kerala PSC listing renders the deadline as plain cell text
       // on some pages instead of a <time> element.
       const rowText = tr.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
       const rawDate = timeMatch
         ? timeMatch[1].replace(/<[^>]+>/g, "").trim()
         : /\b\d{1,2}[.-]\d{1,2}[.-]\d{4}\b/.exec(rowText)?.[0] || "";
-      const applicationLastDate = normalizeDate(rawDate);
+      const applicationLastDate = normalizeDate(rawDate); // Convert date to standard YYYY-MM-DD format
 
-      const gazetteFullUrl = normalizePscUrl(detailRelativeUrl);
+      const gazetteFullUrl = normalizePscUrl(detailRelativeUrl); // Build full absolute URL
 
       if (!gazetteFullUrl) {
         console.warn(`Skipping invalid/untrusted PSC detail URL: ${detailRelativeUrl}`);
@@ -294,10 +307,13 @@ serve(async (req) => {
         continue;
       }
 
-      // Fetch Gazette detail page containing individual posts
+      // -------------------------------------------------------
+      // Step 4: Go into each gazette detail page to find individual exam PDFs
+      // Each gazette on PSC website contains multiple individual exam notifications.
+      // -------------------------------------------------------
       try {
         console.log(`Fetching Gazette detail page: ${gazetteFullUrl}`);
-        const gazetteRes = await fetch(gazetteFullUrl, { headers: FETCH_HEADERS });
+        const gazetteRes = await fetch(gazetteFullUrl, { headers: FETCH_HEADERS }); // Fetch gazette detail page
 
         if (!gazetteRes.ok) {
           console.warn(`Could not load gazette page ${gazetteFullUrl}`);
@@ -305,7 +321,7 @@ serve(async (req) => {
           continue;
         }
 
-        const gazetteHtml = await gazetteRes.text();
+        const gazetteHtml = await gazetteRes.text(); // Get HTML of the gazette detail page
 
         // Extract individual notification items with PDF links
         const itemRegex = /<div\s+class=["']field__item["']>[\s\S]*?<a\s+href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi;
@@ -314,18 +330,18 @@ serve(async (req) => {
 
         while ((itemMatch = itemRegex.exec(gazetteHtml)) !== null) {
           if (fetchedCount >= 12) break;
-          const pdfUrlRaw = itemMatch[1];
-          const rawItemTitle = decodeHtmlEntities(itemMatch[2].replace(/<[^>]+>/g, ""));
+          const pdfUrlRaw = itemMatch[1]; // URL of the official PDF notification
+          const rawItemTitle = decodeHtmlEntities(itemMatch[2].replace(/<[^>]+>/g, "")); // Exam/post name
 
           // Ignore non-notification links like "Back" button
           if (!pdfUrlRaw.includes(".pdf") && !pdfUrlRaw.includes("sites/default/files")) {
-            continue;
+            continue; // Skip this link if it's not a PDF notification file
           }
 
           itemsFoundInGazette++;
           fetchedCount++;
 
-          const pdfUrl = normalizePscUrl(pdfUrlRaw, gazetteFullUrl);
+          const pdfUrl = normalizePscUrl(pdfUrlRaw, gazetteFullUrl); // Validate and build full PDF URL
           if (!pdfUrl) {
             console.warn(`Skipping invalid/untrusted PSC PDF URL: ${pdfUrlRaw}`);
             skippedCount++;
@@ -333,8 +349,9 @@ serve(async (req) => {
           }
 
           // Normalize category number (e.g. Cat.No.151/2026 or Category No. 151/2026 -> 151/2026)
+          // This category number is used as a unique ID to avoid duplicate entries in Supabase
           const catMatch = /(?:Cat(?:egory)?\.?\s*No\.?\s*[:\.]?\s*|\b)([0-9]{1,4}\/[0-9]{4}(?:\s*&\s*[0-9]{1,4}\/[0-9]{4})?)/i.exec(rawItemTitle);
-          const sourceNotificationId = catMatch ? catMatch[1].trim() : null;
+          const sourceNotificationId = catMatch ? catMatch[1].trim() : null; // e.g., "151/2026"
 
           if (!sourceNotificationId) {
             console.warn(`Could not extract category number for item: ${rawItemTitle}`);
@@ -342,30 +359,39 @@ serve(async (req) => {
             continue;
           }
 
-          // Clean post / exam name
+          // Clean post / exam name by removing category number from the title
           const examName = rawItemTitle
             .replace(/\s*\(?(?:Cat(?:egory)?\.?\s*No\.?\s*[:\.]?\s*)?[0-9]{1,4}\/[0-9]{4}(?:\s*&\s*[0-9]{1,4}\/[0-9]{4})?\)?\s*/gi, "")
-            .trim();
+            .trim(); // e.g., "Assistant Engineer (Civil)"
 
-          const notificationTitle = rawItemTitle;
-          const eligibility = await extractEligibilityFromPdf(pdfUrl);
+          const notificationTitle = rawItemTitle; // Full original title with category number
+          // -------------------------------------------------------
+          // Step 5: Read the official PDF to extract eligibility details
+          // The PDF contains qualification, degree, stream, age limit info.
+          // This is unique to PSC — SSC/Railway admin enters this manually.
+          // -------------------------------------------------------
+          const eligibility = await extractEligibilityFromPdf(pdfUrl); // Read PDF and extract eligibility
 
           // Do not save a partial notice: the UI and matching logic require an
           // exam name, a verified qualification, and the official last date.
           if (!examName || !applicationLastDate
             || ![eligibility.qualification, eligibility.degree, eligibility.stream].some((value) => value?.trim())) {
             console.info(`Skipping incomplete PSC notice ${sourceNotificationId}: required exam name, qualification, or last date was not verified.`);
-            skippedCount++;
+            skippedCount++; // Skip if PDF didn't have enough info to be useful
             continue;
           }
 
-          // Upsert logic to prevent duplicates
+          // -------------------------------------------------------
+          // Step 6: Check if this PSC exam already exists in Supabase
+          // Uses source="Kerala PSC" + category number as unique identifier.
+          // This prevents the same exam from being inserted twice.
+          // -------------------------------------------------------
           const { data: existing, error: lookupErr } = await supabase
-            .from("exam_notifications")
+            .from("exam_notifications")   // Check in the same table used by all exams
             .select("id")
-            .eq("source", "Kerala PSC")
-            .eq("source_notification_id", sourceNotificationId)
-            .maybeSingle();
+            .eq("source", "Kerala PSC")               // Only look at PSC records
+            .eq("source_notification_id", sourceNotificationId) // Match by category number (e.g., "151/2026")
+            .maybeSingle(); // Returns null if not found, one record if found
 
           if (lookupErr) {
             console.error(`Error checking existing PSC record ${sourceNotificationId}:`, lookupErr);
@@ -373,52 +399,57 @@ serve(async (req) => {
             continue;
           }
 
-          const nowIso = new Date().toISOString();
+          const nowIso = new Date().toISOString(); // Current timestamp for created_at/updated_at
 
           if (existing) {
-            // Update existing record
+            // -------------------------------------------------------
+            // Record already in Supabase → UPDATE with fresh scraped data
+            // -------------------------------------------------------
             const { error: updateErr } = dryRun ? { error: null } : await supabase
               .from("exam_notifications")
               .update({
-                exam_name: examName,
+                exam_name: examName,               // Refresh exam name
                 notification_title: notificationTitle,
-                qualification: eligibility.qualification ?? null,
-                degree: eligibility.degree ?? null,
-                stream: eligibility.stream ?? null,
-                age_limit: eligibility.age_limit ?? null,
-                application_last_date: applicationLastDate,
-                official_notification_url: pdfUrl,
+                qualification: eligibility.qualification ?? null, // Refreshed from PDF
+                degree: eligibility.degree ?? null,               // Refreshed from PDF
+                stream: eligibility.stream ?? null,               // Refreshed from PDF
+                age_limit: eligibility.age_limit ?? null,         // Refreshed from PDF
+                application_last_date: applicationLastDate,       // Refreshed deadline
+                official_notification_url: pdfUrl,                // Link to official PSC PDF
                 official_website_url: "https://www.keralapsc.gov.in/",
                 is_active: true,
-                updated_at: nowIso,
+                updated_at: nowIso, // Mark when this record was last refreshed
               })
-              .eq("id", existing.id);
+              .eq("id", existing.id); // Update only this specific record
 
             if (updateErr) {
               console.error(`Error updating record ${sourceNotificationId}:`, updateErr);
               skippedCount++;
             } else {
-              updatedCount++;
+              updatedCount++; // Count successful updates
             }
           } else {
-            // Insert new record
+            // -------------------------------------------------------
+            // New exam not in Supabase yet → INSERT as a new record
+            // category: "PSC" tells the frontend this is a PSC exam
+            // -------------------------------------------------------
             const { error: insertErr } = dryRun ? { error: null } : await supabase
               .from("exam_notifications")
               .insert({
-                category: "PSC",
+                category: "PSC",                               // Marks this as PSC exam (used for filtering in UI)
                 organization: "Kerala Public Service Commission",
-                exam_name: examName,
+                exam_name: examName,                           // Extracted from PSC website
                 notification_title: notificationTitle,
-                qualification: eligibility.qualification ?? null,
-                degree: eligibility.degree ?? null,
-                stream: eligibility.stream ?? null,
-                age_limit: eligibility.age_limit ?? null,
-                application_last_date: applicationLastDate,
-                official_notification_url: pdfUrl,
+                qualification: eligibility.qualification ?? null, // Extracted from official PDF
+                degree: eligibility.degree ?? null,               // Extracted from official PDF
+                stream: eligibility.stream ?? null,               // Extracted from official PDF
+                age_limit: eligibility.age_limit ?? null,         // Extracted from official PDF
+                application_last_date: applicationLastDate,       // Extracted from PSC website
+                official_notification_url: pdfUrl,                // Direct link to official PSC PDF
                 official_website_url: "https://www.keralapsc.gov.in/",
                 is_active: true,
-                source: "Kerala PSC",
-                source_notification_id: sourceNotificationId,
+                source: "Kerala PSC",                          // Identifies the source as Kerala PSC website
+                source_notification_id: sourceNotificationId, // Unique category number e.g., "151/2026"
                 created_at: nowIso,
                 updated_at: nowIso,
               });

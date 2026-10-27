@@ -442,6 +442,8 @@ export default function Transcript() {
  const [multipleVideos, setMultipleVideos] = useState([])
 const [batchResults, setBatchResults] = useState([])
 const [isBatchProcessing, setIsBatchProcessing] = useState(false)
+const [isGeneratingIndividualSummaries, setIsGeneratingIndividualSummaries] = useState(false)
+const [isGeneratingCombinedSummary, setIsGeneratingCombinedSummary] = useState(false)
 
   // Combined summary for multiple videos
   const [combinedSummary, setCombinedSummary] = useState('')
@@ -506,6 +508,13 @@ const [isBatchProcessing, setIsBatchProcessing] = useState(false)
     setMultipleVideos([])
 
   }
+  // =========================================================================
+  // COMMENT 2: MULTIPLE VIDEO TRANSCRIPT FUNCTION
+  // Function: handleBatchTranscript
+  // Description: Iterates through each video in the `multipleVideos` array,
+  // making batch API requests to `${API_BASE_URL}/api/transcript` for each URL.
+  // It tracks progress, collects individual transcripts, and updates batchResults.
+  // =========================================================================
   const handleBatchTranscript = async () => {
   if (multipleVideos.length === 0) {
     alert('Please add at least one YouTube video.')
@@ -1076,10 +1085,17 @@ const [isBatchProcessing, setIsBatchProcessing] = useState(false)
       'Paste a YouTube URL and get started.'
     )
 
-  // ==========================================
-  // SUMMARY TYPE
-  // ==========================================
-
+  // =========================================================================
+  // COMMENT 3: SUMMARY CONFIGURATION & CONSTANTS (TELLS API HOW TO MAKE SUMMARY)
+  // `summaryTypes` defines the 3 summary formats available in the system:
+  // 1. 'detailed': In-depth explanation with key concepts and background details.
+  // 2. 'bullet': Quick bullet points focusing on takeaways and core exam points.
+  // 3. 'abstract': High-level concise abstract capturing the overall essence.
+  // When generating summary, `summaryType` ('detailed' | 'bullet' | 'abstract')
+  // is passed in the request body to `/api/summarize-transcript` instructing the
+  // AI backend exactly what style, formatting, and depth of summary to generate.
+  // (See line ~4363 for the trigger button `Generate Summary` calling `handleSummaryGeneration`).
+  // =========================================================================
   const summaryTypes = [
   {
     id: 'detailed',
@@ -1339,10 +1355,17 @@ const [isBatchProcessing, setIsBatchProcessing] = useState(false)
 
     }
 
-  // ==========================================
-  // GET REAL YOUTUBE TRANSCRIPT
-  // ==========================================
-
+  // =========================================================================
+  // COMMENT 4: HOW TO FETCH TRANSCRIPT FROM BUTTON CLICK
+  // Function: handleGetTranscript
+  // Triggered by: "Get Transcript" button click (line ~2884, onClick={handleGetTranscript})
+  // Mechanism:
+  // 1. Validates that `youtubeUrl` is non-empty.
+  // 2. Resets UI states and initiates loading animation.
+  // 3. Makes HTTP POST request to `${API_BASE_URL}/api/transcript` with payload:
+  //    { videoUrl, language: 'Malayalam' | 'English', transcriptMode, startTime, endTime }
+  // 4. Receives raw/formatted transcript response and saves it in `transcript` state.
+  // =========================================================================
   const handleGetTranscript =
     async () => {
 
@@ -1650,7 +1673,7 @@ const [isBatchProcessing, setIsBatchProcessing] = useState(false)
       return
     }
 
-    if (isBatchProcessing) return
+    if (isBatchProcessing || isGeneratingIndividualSummaries || isGeneratingCombinedSummary) return
 
     const completedVideos = batchResults.filter(
       (item) =>
@@ -1663,7 +1686,7 @@ const [isBatchProcessing, setIsBatchProcessing] = useState(false)
       return
     }
 
-    setIsBatchProcessing(true)
+    setIsGeneratingIndividualSummaries(true)
     setApiError('')
 
     const updatedResults = [...batchResults]
@@ -1771,7 +1794,7 @@ const [isBatchProcessing, setIsBatchProcessing] = useState(false)
       }
     }
 
-    setIsBatchProcessing(false)
+    setIsGeneratingIndividualSummaries(false)
 
     console.log(
       'Batch summary generation completed:',
@@ -1791,7 +1814,7 @@ const [isBatchProcessing, setIsBatchProcessing] = useState(false)
       return
     }
 
-    if (isBatchProcessing) return
+    if (isBatchProcessing || isGeneratingIndividualSummaries || isGeneratingCombinedSummary) return
 
     const completedVideos = batchResults.filter(
       (item) =>
@@ -1804,7 +1827,7 @@ const [isBatchProcessing, setIsBatchProcessing] = useState(false)
       return
     }
 
-    setIsBatchProcessing(true)
+    setIsGeneratingCombinedSummary(true)
     setApiError('')
     setCombinedSummary('')
     setCombinedSummaryStatus('processing')
@@ -1896,7 +1919,7 @@ const [isBatchProcessing, setIsBatchProcessing] = useState(false)
 
     } finally {
 
-      setIsBatchProcessing(false)
+      setIsGeneratingCombinedSummary(false)
 
     }
   }
@@ -2854,6 +2877,15 @@ if (storageError) {
         </div>
 
 
+        {/* =========================================================================
+            COMMENT 1: ONE VIDEO TRANSCRIPT SECTION
+            Section: Single Video Card UI (activeMode === 'single')
+            Description: Displays input fields for single video transcription:
+            - YouTube URL input field (`youtubeUrl`)
+            - File upload alternative (`uploadedFile`)
+            - Language selection (Malayalam/English) and timestamp range options
+            - "Get Transcript" button triggering `handleGetTranscript`
+            ========================================================================= */}
         {/* 3. SINGLE VIDEO SECTION */}
 
         {activeMode === 'single' && (
@@ -3964,10 +3996,10 @@ if (storageError) {
                 <button
                   className="tr-download-btn"
                   onClick={handleCombinedSummaryGeneration}
-                  disabled={isBatchProcessing}
+                  disabled={isBatchProcessing || isGeneratingCombinedSummary || isGeneratingIndividualSummaries}
                 >
                   <FiRefreshCw size={14} />
-                  {isBatchProcessing ? 'Regenerating...' : 'Regenerate'}
+                  {isGeneratingCombinedSummary ? 'Regenerating...' : 'Regenerate'}
                 </button>
 
                 <button
@@ -4078,9 +4110,9 @@ if (storageError) {
                 <button
                   className="tr-get-transcript-btn"
                   onClick={handleBatchSummaryGeneration}
-                  disabled={isBatchProcessing}
+                  disabled={isBatchProcessing || isGeneratingIndividualSummaries || isGeneratingCombinedSummary}
                 >
-                  {isBatchProcessing
+                  {isGeneratingIndividualSummaries
                     ? 'Generating Summaries...'
                     : 'Generate Summary for Each Video'}
                 </button>
@@ -4090,6 +4122,8 @@ if (storageError) {
                   onClick={handleCombinedSummaryGeneration}
                   disabled={
                     isBatchProcessing ||
+                    isGeneratingIndividualSummaries ||
+                    isGeneratingCombinedSummary ||
                     batchResults.filter(
                       (item) =>
                         item.status === 'completed' &&
@@ -4101,8 +4135,8 @@ if (storageError) {
                       'linear-gradient(135deg, #7c3aed, #6d28d9)'
                   }}
                 >
-                  {isBatchProcessing
-                    ? 'Generating...'
+                  {isGeneratingCombinedSummary
+                    ? 'Generating Combined Summary...'
                     : 'Generate Combined Summary'}
                 </button>
               </div>

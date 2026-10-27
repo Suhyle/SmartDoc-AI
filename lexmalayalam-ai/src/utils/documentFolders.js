@@ -1,3 +1,9 @@
+// =========================================================================
+// FOLDER STORAGE: LOCALSTORAGE KEY FOR CUSTOM DOCUMENT FOLDERS
+// All custom subfolders created by the user or saved with PDFs are
+// stored under this localStorage key as a JSON object:
+// { "PSC": ["Kerala PSC CGL", "LDC 2026"], "SSC": ["SSC CHSL"] }
+// =========================================================================
 const STORAGE_KEY = 'smartdoc:custom-document-folders:v1'
 
 export const getCustomDocumentFolders = () => {
@@ -12,6 +18,16 @@ export const getCustomDocumentFolders = () => {
   return parsed
 }
 
+// =========================================================================
+// WHERE FOLDER IS CREATED AND SAVED TO LOCAL STORAGE
+// Function: saveCustomDocumentFolder
+// Triggered by: "Create Subfolder" in Documents.jsx or auto-created when saving a PDF
+// Mechanism:
+// 1. Cleans and normalizes `category` (e.g., 'PSC') and `folderName`.
+// 2. Checks against duplicates in `existingNames`.
+// 3. Appends `folderName` to the category's folder list in the `folders` object.
+// 4. Writes the updated folder directory to localStorage (`smartdoc:custom-document-folders:v1`).
+// =========================================================================
 export const saveCustomDocumentFolder = (category, folderName, existingNames = []) => {
   const cleanCategory = String(category || '').trim()
   const cleanName = String(folderName || '').trim().replace(/\s+/g, ' ')
@@ -27,6 +43,7 @@ export const saveCustomDocumentFolder = (category, folderName, existingNames = [
   }
 
   folders[cleanCategory] = [...names, cleanName]
+  // Save updated folder tree into localStorage:
   localStorage.setItem(STORAGE_KEY, JSON.stringify(folders))
   return folders
 }

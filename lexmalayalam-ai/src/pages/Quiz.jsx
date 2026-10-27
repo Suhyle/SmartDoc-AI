@@ -62,6 +62,7 @@ const FORMATS = [
 
 const Q_COUNTS = [5, 10, 15, 20, 30, 50];
 const TIME_LIMITS = [
+  { label: 'By question count (1 min/question)', value: -1 },
   { label: '15 minutes', value: 15 },
   { label: '20 minutes', value: 20 },
   { label: '30 minutes', value: 30 },
@@ -606,6 +607,21 @@ function SetupScreen({ initialExams, studyPlan, transcripts, onStart }) {
     return sections;
   };
 
+  // =========================================================================
+  // EXAM SECTION: WHERE AI CREATES EXAM ON BUTTON CLICK
+  // Function: handleCreate
+  // Triggered by: Clicking the "Create ... Mock Test" button (line ~1010, onClick={handleCreate})
+  // How it works:
+  // 1. User configures the exam settings (testType, questionCount, difficulty, format, language, syllabus scope).
+  // 2. Optional: Fetches transcripts from selected study plan videos via `/api/transcript`.
+  // 3. AI Generation Call (lines ~710-720):
+  //    Calls `generateQuestions()` which sends an HTTP POST request to:
+  //    `${API_BASE_URL}/api/quiz/generate`
+  //    Payload includes: { exams, testType, scope, questionCount, difficulty, format, language, syllabusSections, transcripts }
+  // 4. Backend AI (Groq → Gemini fallback) parses the syllabus topics & transcripts,
+  //    and automatically generates mock questions (MCQs with 4 options, correct answer, explanation, or written questions).
+  // 5. Calls `onStart(config)` which launches the interactive `TestScreen` for the user to take the exam.
+  // =========================================================================
   const handleCreate = async () => {
     if (!canCreate) return;
     setCreating(true);
@@ -868,6 +884,11 @@ function SetupScreen({ initialExams, studyPlan, transcripts, onStart }) {
             <select value={timeLimit} onChange={(e) => setTimeLimit(Number(e.target.value))}>
               {TIME_LIMITS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
             </select>
+            {timeLimit === -1 && (
+              <span className="qz-field-hint">
+                ≈ {questionCount} min total for {questionCount} question{questionCount !== 1 ? 's' : ''}
+              </span>
+            )}
           </label>
           <label className="qz-field">
             Difficulty level
@@ -991,6 +1012,11 @@ function SetupScreen({ initialExams, studyPlan, transcripts, onStart }) {
       </section>
 
       <div className="qz-create-row">
+        {/* =========================================================================
+            TRIGGER BUTTON: AI CREATES EXAM ON THIS BUTTON CLICK
+            Button: "Create ... Mock Test"
+            Event: onClick={handleCreate} -> initiates AI exam question generation
+            ========================================================================= */}
         <button
           type="button"
           className="qz-create-button"
@@ -1009,12 +1035,15 @@ function SetupScreen({ initialExams, studyPlan, transcripts, onStart }) {
 
 function TestScreen({ config, onSubmit, onAbort }) {
   const { questions, timeLimit, exams } = config;
+  const questionCount = questions?.length ?? 0;
+  // timeLimit === -1 means "1 minute per question"
+  const effectiveTimeLimit = timeLimit === -1 ? questionCount : timeLimit;
   const transcriptStatuses = Object.values(config.transcriptStatuses || {});
   const transcriptCount = transcriptStatuses.filter((status) => status.status === 'available').length;
   const [qIndex, setQIndex] = useState(0);
   const [answers, setAnswers] = useState({});           // { qId: string | null }
   const [images, setImages] = useState({});             // { qId: { dataUrl, name } }
-  const [secondsLeft, setSecondsLeft] = useState(timeLimit > 0 ? timeLimit * 60 : null);
+  const [secondsLeft, setSecondsLeft] = useState(effectiveTimeLimit > 0 ? effectiveTimeLimit * 60 : null);
   const [confirming, setConfirming] = useState(false);
   const fileRef = useRef(null);
 

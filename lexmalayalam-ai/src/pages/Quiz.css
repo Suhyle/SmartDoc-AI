@@ -224,6 +224,13 @@
   font: inherit;
   font-size: 0.85rem;
 }
+.qz-field-hint {
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: #7c85a2;
+  font-style: italic;
+  margin-top: -2px;
+}
 
 /* ── Test formats ──────────────────────────────────────────────────── */
 .qz-format-label {

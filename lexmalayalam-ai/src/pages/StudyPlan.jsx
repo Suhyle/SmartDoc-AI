@@ -136,12 +136,34 @@ export default function StudyPlan() {
         setLoadError(error.message || 'Could not load exams from Supabase.');
       } else {
         const rows = data || [];
-        setExams(rows);
+        // Save cached exam details so even if an exam expires and is removed from DB,
+        // its study plan, metadata, and reminder chip survive locally.
+        const cachedExamStore = safeJson('smartdoc-study-plan:cached-exams') || {};
+        rows.forEach((row) => {
+          if (row?.id) cachedExamStore[String(row.id)] = row;
+        });
         const routeExam = location.state?.exam;
+        if (routeExam?.id) cachedExamStore[String(routeExam.id)] = routeExam;
+        try {
+          localStorage.setItem('smartdoc-study-plan:cached-exams', JSON.stringify(cachedExamStore));
+        } catch {
+          // Ignore local storage quota errors
+        }
+
+        // Merge active rows with cached reminder exams to ensure study plans never disappear
+        const allKnownExams = [...rows];
+        Object.values(cachedExamStore).forEach((cached) => {
+          if (cached?.id && !allKnownExams.some((r) => String(r.id) === String(cached.id))) {
+            allKnownExams.push(cached);
+          }
+        });
+        setExams(allKnownExams);
+
         const savedExamId = localStorage.getItem('smartdoc-study-plan:exam-id');
         const preferredExamId = routeExam?.id ?? savedExamId;
-        const chosen = rows.find((row) => preferredExamId !== null && preferredExamId !== undefined && String(row.id) === String(preferredExamId))
+        const chosen = allKnownExams.find((row) => preferredExamId !== null && preferredExamId !== undefined && String(row.id) === String(preferredExamId))
           || (routeExam?.exam_name ? routeExam : null)
+          || (cachedExamStore[String(preferredExamId)] || null)
           || null;
         setSelectedExam(chosen);
         if (!location.state?.plan) setPlan(loadPlanForExam(chosen?.id));
@@ -302,6 +324,17 @@ export default function StudyPlan() {
     )));
   };
 
+  // =========================================================================
+  // CREATION 1: USER INPUT CAN CREATE TIMETABLE (CUSTOM SYLLABUS)
+  // Function: createPlanFromCustomSyllabus
+  // Triggered by: Clicking "Build timetable from my syllabus" button (line ~735)
+  // How it works:
+  // 1. Reads user inputs: subjects (`section.name`) and topics (`section.topics`).
+  // 2. Uses user-selected duration (`effectiveDurationDays`) and study hours (`studyHoursPerDay`).
+  // 3. Spreads and rotates subjects across the calendar days, adding revision and mock tests.
+  // 4. Groups the schedule into 7-day weekly blocks.
+  // 5. Saves the timetable locally in `smartdoc-study-plan:plan:${examId}` so it persists forever.
+  // =========================================================================
   const createPlanFromCustomSyllabus = () => {
     const syllabusSections = customSyllabusSections
       .map((section) => ({
@@ -435,6 +468,20 @@ export default function StudyPlan() {
     setPendingDelete(null);
   };
 
+  // =========================================================================
+  // CREATION 2: AI CREATES TIMETABLE
+  // Function: handleGenerate
+  // Triggered by: Clicking "Generate study plan" / "Regenerate study plan" button (line ~775)
+  // How it works:
+  // 1. Gathers chosen parameters: `selectedExam`, `effectiveDurationDays`, `studyHoursPerDay`, `startDate`.
+  // 2. Makes HTTP POST request to backend API: `${API_BASE_URL}/api/study-plan/generate`.
+  // 3. AI provider (Groq → Gemini fallback chain):
+  //    - Searches/retrieves the official syllabus for this exam.
+  //    - Breaks it down into topics and organizes tasks across the duration.
+  // 4. Stores the generated plan in React state `plan`.
+  // 5. Caches the plan in localStorage (`smartdoc-study-plan:plan:${selectedExam.id}`)
+  //    so that even after notification deadlines expire, the full plan is preserved.
+  // =========================================================================
   const handleGenerate = async () => {
     if (!selectedExam) {
       setPlanError('Choose an exam first.');
@@ -755,7 +802,7 @@ export default function StudyPlan() {
               {generating ? <><FiRefreshCw className="sp-spin" /> Finding syllabus…</> : <><FiZap /> {plan ? 'Regenerate study plan' : 'Generate study plan'}</>}
             </button>
           </div>
-          <p className="sp-plan-note">Study Plan tries Gemini, then Groq, then Antigravity, and finally DeepSeek V4.1 Flash through Ollama Cloud if earlier providers fail. The timetable spreads subjects across {effectiveDurationDays} days, with up to {studyHoursPerDay} study hours each day.</p>
+          <p className="sp-plan-note">Study Plan uses Groq first, then Gemini as fallback. The timetable spreads subjects across {effectiveDurationDays} days, with up to {studyHoursPerDay} study hours each day.</p>
         </section>
 
         {generating && !plan && (

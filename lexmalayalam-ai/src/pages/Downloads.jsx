@@ -251,10 +251,14 @@ export default function Downloads() {
   }, [selectedExams])
 
 
-  // =========================================================
-  // FILTER CATEGORIES
-  // =========================================================
-
+  // =========================================================================
+  // DOWNLOADS SECTION: FOLDER STRUCTURE & STORAGE DISCOVERY
+  // Categories and Folders in this view are dynamically built from 3 sources:
+  // 1. User selected exams from Supabase profile (`selectedCategories`).
+  // 2. Custom created folders stored in localStorage (`getCustomDocumentFolders()`).
+  // 3. Exam subfolders assigned to saved PDFs in IndexedDB / local storage (`pdf.category` & `pdf.examName`).
+  // The UI filters documents into folder views (e.g., PSC -> LDC 2026).
+  // =========================================================================
   const categories = useMemo(() => {
 
     return [

@@ -4,7 +4,11 @@ import { useNavigate } from "react-router-dom";
 
 import { supabase } from "../supabase";
 
-import { flushSignupDraft } from "../utils/signupDraft";
+import {
+  flushSignupDraft,
+  persistSelectedExamsToSupabase,
+  readSelectedExams,
+} from "../utils/signupDraft";
 
 import "./Login.css";
 
@@ -123,12 +127,27 @@ export default function Login() {
 
       try {
 
-        const flushedDraft = await flushSignupDraft();
+        const flushedDraft = await flushSignupDraft(data.user);
 
         if (flushedDraft) {
 
           console.log("Signup qualification draft saved:", flushedDraft);
 
+        }
+
+        const existingAccountExams = data.user?.user_metadata?.selected_exams;
+        if (Array.isArray(existingAccountExams) && existingAccountExams.length > 0) {
+          writeSelectedExams(existingAccountExams);
+        } else {
+          const savedExams = readSelectedExams();
+          if (savedExams && savedExams.length > 0) {
+            try {
+              await persistSelectedExamsToSupabase(savedExams);
+              console.log("Selected exams synced to account:", savedExams);
+            } catch (examErr) {
+              console.warn("Could not sync selected exams to account:", examErr);
+            }
+          }
         }
 
       } catch (draftError) {

@@ -363,9 +363,31 @@ export default function SelectExam() {
   /* =======================================================
      CONTINUE
   ======================================================= */
-  //folder funtion handling
-
- const handleContinue = async () => {
+  // =========================================================================
+  // EXAM SELECTION -> LOGIN -> HOME PIPELINE & YOUTUBE RECOMMENDATIONS FLOW
+  // Function: handleContinue
+  // Triggered by: Clicking "Continue" button on Select Exam page
+  // Pipeline:
+  // 1. User picks target exams (e.g. PSC, SSC, UPSC, Railway, Banking).
+  // 2. Storage / Persistence:
+  //    - If already logged in (hasSession = true):
+  //      `persistSelectedExamsToSupabase(selectedExams)` writes directly to
+  //      `user.user_metadata.selected_exams` in Supabase Auth.
+  //    - If not logged in yet (hasSession = false):
+  //      Writes to localStorage `smartdoc_selected_exams` draft.
+  // 3. Routing navigation:
+  //    - `navigate('/login')`
+  //    - Navigates to `/login`.
+  //    - In `Login.jsx` upon successful sign in, `flushSignupDraft()` uploads
+  //      the draft qualifications & selected exams to Supabase, then navigates to `/home`.
+  // 4. How Recommended YouTube Videos appear on Home Page (`Home.jsx`):
+  //    - In `Home.jsx`, `user.user_metadata.selected_exams` is read into `examKeys`.
+  //    - `useRecommendations(user, examKeys)` queries Supabase table `exam_recommendations`.
+  //    - It filters videos matching the student's selected exam categories:
+  //      `items = data.filter(r => examKeys.includes(normalizeExamKey(r.exam_id || r.exam_name)))`
+  //    - These YouTube video cards are rendered on the Home dashboard under "Recommended for You"!
+  // =========================================================================
+  const handleContinue = async () => {
     if (selectedExams.length === 0) {
       setShowValidation(true)
       return
@@ -380,17 +402,28 @@ export default function SelectExam() {
     )
 
     try {
+      // 1. Always save selected exams to local draft storage
+      writeSelectedExams(selectedExams)
+      try {
+        localStorage.setItem(
+          'smartdoc_selected_exam_details',
+          JSON.stringify(selectedExamDetails)
+        )
+      } catch {
+        /* storage may be unavailable in private mode */
+      }
+
+      // 2. If a session exists, sync exams then sign out so the user enters Home through Login
       if (hasSession) {
-        await persistSelectedExamsToSupabase(selectedExams)
-      } else {
-        writeSelectedExams(selectedExams)
         try {
-          localStorage.setItem(
-            'smartdoc_selected_exam_details',
-            JSON.stringify(selectedExamDetails)
-          )
-        } catch {
-          /* storage may be unavailable in private mode */
+          await persistSelectedExamsToSupabase(selectedExams)
+        } catch (syncErr) {
+          console.warn('Could not sync selected exams to current session:', syncErr)
+        }
+        try {
+          await supabase.auth.signOut()
+        } catch (signOutErr) {
+          console.warn('Could not sign out session:', signOutErr)
         }
       }
     } catch (error) {
@@ -401,8 +434,10 @@ export default function SelectExam() {
       return
     }
 
-    navigate(hasSession ? '/home' : '/login')
+    // Always navigate to /login: through login page it enters into /home
+    navigate('/login')
   }
+
 
 
   return (

@@ -120,6 +120,7 @@ const Signup = () => {
         state: {
           fullName: name.trim(),
           email: email.trim(),
+          userId: data?.user?.id || null,
           needsEmailConfirmation: !data?.session,
         },
       })

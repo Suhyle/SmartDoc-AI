@@ -104,16 +104,42 @@ export default function Feedback() {
     return Object.keys(e).length === 0
   }
 
-  /* Connect point for the future Admin system. */
+  // =========================================================================
+  // TRANSMISSION STEP 1: INSERT FEEDBACK ROW INTO SUPABASE
+  // Function: submitFeedback
+  // Writes a new feedback record into Supabase database table `feedback`.
+  // The Admin Panel queries this exact same table to display incoming feedback.
+  // =========================================================================
   const submitFeedback = async (payload) => {
     if (!FEEDBACK_TABLE) {
       console.info('[Feedback] Not sent: no feedback table configured yet.', payload)
       return
     }
+    // Database INSERT: Adds user feedback into Supabase 'feedback' table
     const { error } = await supabase.from(FEEDBACK_TABLE).insert([payload])
     if (error) throw error
   }
 
+  // =========================================================================
+  // HOW FEEDBACK DATA IS SENT FROM USER TO ADMIN PANEL
+  // Triggered by: User clicking "Submit Feedback" button (form onSubmit)
+  // Flow:
+  // 1. Validates rating, feedbackType, and description.
+  // 2. Fetches logged-in user credentials (`user_id`, `user_name`, `user_email`).
+  // 3. Packages all answers into a payload:
+  //    - `user_id`, `user_name`, `user_email`: Identifies the student
+  //    - `rating` & `experience`: 1 to 5 stars ("Excellent", "Good", etc.)
+  //    - `feedback_type`: 'problem' | 'feature' | 'general' | 'positive'
+  //    - `related_exams`: e.g. ['Kerala PSC', 'SSC']
+  //    - `description`: The detailed text entered by the user
+  //    - `status`: Marked as 'new' (triggers notification counter in Admin Panel)
+  //    - `created_at`: Timestamp
+  // 4. Calls `submitFeedback(payload)` which executes `supabase.from('feedback').insert(...)`
+  // 5. In AdminPanel.jsx:
+  //    - `AdminPanel.jsx` queries `supabase.from('feedback').select('*')` (line ~66)
+  //    - Displays it under the "Feedback" management tab with unread count (`status === 'new'`)
+  //    - Admin can view details and update status ('reviewed' | 'resolved') with notes.
+  // =========================================================================
   const handleSubmit = async (ev) => {
     ev.preventDefault()
     if (!validate()) return

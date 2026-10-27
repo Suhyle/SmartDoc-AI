@@ -214,6 +214,16 @@ export default function Documents() {
     }
   }
 
+  // =========================================================================
+  // MY DOCUMENTS: WHERE USER CREATES A FOLDER ON BUTTON CLICK
+  // Function: createSubfolder
+  // Triggered by: Submitting the "Create Subfolder" form in Documents.jsx
+  // How it works:
+  // 1. Reads selected exam notification name OR manual folder input (`manualFolderName`).
+  // 2. Invokes `saveCustomDocumentFolder(selectedCategory, folderName, examFolders)`.
+  // 3. Persists the new folder to localStorage (`smartdoc:custom-document-folders:v1`).
+  // 4. Updates React state `setCustomFolders(updated)` which renders the folder card immediately.
+  // =========================================================================
   const createSubfolder = (event) => {
     event.preventDefault()
     setFolderMessage('')

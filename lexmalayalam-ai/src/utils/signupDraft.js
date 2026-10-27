@@ -116,9 +116,8 @@ export const persistProfileToSupabase = async (userId, draft) => {
 
   const timestamp = new Date().toISOString()
 
-  if (cleaned.length) {
-    // Insert before deleting so a rejected insert can never leave the user with
-    // zero qualification rows.
+  if (cleaned.length > 0) {
+    // 1. Insert new qualification rows linked to the user's unique ID
     const { error: insertError } = await supabase.from('user_qualifications').insert(
       cleaned.map((item) => ({
         user_id: userId,
@@ -135,23 +134,15 @@ export const persistProfileToSupabase = async (userId, draft) => {
     )
 
     if (insertError) throw insertError
-  }
 
-  const { error: clearError } = await supabase
-    .from('user_qualifications')
-    .delete()
-    .eq('user_id', userId)
-
-  if (clearError) throw clearError
-
-  if (cleaned.length) {
+    // 2. Only remove older/stale rows for this user (never delete the rows just inserted)
     const { error: staleError } = await supabase
       .from('user_qualifications')
       .delete()
       .eq('user_id', userId)
       .neq('updated_at', timestamp)
 
-    if (staleError) throw staleError
+    if (staleError) console.warn('Could not clean older qualification rows:', staleError)
   }
 
   const { error: metadataError } = await supabase.auth.updateUser({
@@ -176,12 +167,11 @@ export const persistSelectedExamsToSupabase = async (exams) => {
   return unique
 }
 
-export const flushSignupDraft = async () => {
+export const flushSignupDraft = async (existingUser = null) => {
   const draft = readSignupDraft()
   if (!draft) return null
 
-  const { data } = await supabase.auth.getUser()
-  const user = data?.user
+  const user = existingUser || (await supabase.auth.getUser())?.data?.user
   if (!user) return null
 
   await persistProfileToSupabase(user.id, draft)
